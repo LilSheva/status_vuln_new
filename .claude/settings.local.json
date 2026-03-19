@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/test_preprocessor.py tests/test_fuzzy_matcher.py tests/test_exact_matcher.py tests/test_scorer.py tests/test_status_assigner.py tests/test_normalizer.py tests/test_repository.py tests/test_readers.py -v)",
+      "Bash(python -m pytest tests/test_vectorizer.py tests/test_pipeline.py -v)",
+      "Bash(python -c \"from matcher.io.report_writer import write_report; print\\(''report_writer OK''\\)\")",
+      "Bash(python -c \"from matcher.config import load_settings, save_settings; print\\(''config OK''\\)\")",
+      "Bash(python -m pytest tests/test_preprocessor.py tests/test_fuzzy_matcher.py tests/test_exact_matcher.py tests/test_scorer.py tests/test_status_assigner.py tests/test_normalizer.py tests/test_repository.py tests/test_readers.py -v --tb=short)",
+      "Bash(python -c \":*)",
+      "Bash(python -m pytest tests/test_knowledge_base.py tests/test_repository.py -v --tb=short)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -m pytest tests/test_scripts.py -v --tb=short)",
+      "Bash(python -m pytest tests/ -v --tb=short -x)",
+      "Bash(pyinstaller knowledge_base.spec --noconfirm)",
+      "Bash(pyinstaller matcher.spec --noconfirm)",
+      "Bash(timeout 5 python -c \":*)",
+      "Bash(timeout 10 python -c \":*)",
+      "Bash(python -m pytest tests/ -x --tb=short)",
+      "Bash(timeout 8 python -c \":*)"
+    ]
+  }
+}
