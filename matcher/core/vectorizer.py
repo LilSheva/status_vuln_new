@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
 
 from shared.constants import DEFAULT_TOP_N, DEFAULT_VECTOR_THRESHOLD, EMBEDDING_MODEL_NAME
 
@@ -17,6 +15,7 @@ _MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models"
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+    from sentence_transformers import SentenceTransformer
 
     from shared.types import Software
 
@@ -37,6 +36,8 @@ class Vectorizer:
         falls back to downloading from HuggingFace Hub.
         """
         if self._model is None:
+            from sentence_transformers import SentenceTransformer
+
             local_path = _MODELS_DIR / self._model_name
             if local_path.is_dir():
                 logger.info("Loading bundled model: %s", local_path)
@@ -103,6 +104,8 @@ class Vectorizer:
         Returns:
             List of (Software, score) tuples, sorted by score descending.
         """
+        from sklearn.metrics.pairwise import cosine_similarity
+
         query_emb = self.encode([query])  # shape (1, dim)
         scores = cosine_similarity(query_emb, index_embeddings)[0]  # shape (n,)
 
@@ -142,6 +145,8 @@ class Vectorizer:
         """
         if not queries:
             return []
+
+        from sklearn.metrics.pairwise import cosine_similarity
 
         query_embs = self.encode(queries)  # shape (q, dim)
         all_scores = cosine_similarity(query_embs, index_embeddings)  # shape (q, n)
