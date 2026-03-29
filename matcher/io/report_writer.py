@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 _HEADER_FONT = Font(name="Segoe UI", bold=True, size=11, color="FFFFFF")
 _HEADER_FILL = PatternFill(start_color="4A5ABF", end_color="4A5ABF", fill_type="solid")
 _HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center", wrap_text=True)
-_THIN_SIDE = Side(style="thin", color="BFBFBF")
-_MEDIUM_SIDE = Side(style="medium", color="2C3E50")
+_THIN_SIDE = Side(style="thin", color="000000")
+_SEP_SIDE = Side(style="medium", color="000000")   # group separator in detail sheet
 
 _THIN_BORDER = Border(
     left=_THIN_SIDE, right=_THIN_SIDE, top=_THIN_SIDE, bottom=_THIN_SIDE,
@@ -70,16 +70,10 @@ def _auto_width(ws: Worksheet, col_count: int, max_width: int = 50) -> None:
 
 
 def _apply_table_borders(ws: Worksheet, last_row: int, col_count: int) -> None:
-    """Apply thin inner borders and medium outer border to the full table (rows 1..last_row)."""
+    """Apply black thin borders to every cell of the table (rows 1..last_row)."""
     for row in range(1, last_row + 1):
         for col in range(1, col_count + 1):
-            top = _MEDIUM_SIDE if row == 1 else _THIN_SIDE
-            bottom = _MEDIUM_SIDE if row == last_row else _THIN_SIDE
-            left = _MEDIUM_SIDE if col == 1 else _THIN_SIDE
-            right = _MEDIUM_SIDE if col == col_count else _THIN_SIDE
-            ws.cell(row=row, column=col).border = Border(
-                top=top, bottom=bottom, left=left, right=right,
-            )
+            ws.cell(row=row, column=col).border = _THIN_BORDER
 
 
 def _score_fill(score: float) -> PatternFill | None:
@@ -223,11 +217,16 @@ _DETAIL_HEADERS = [
 ]
 
 
-def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
-    """Write the detailed analysis sheet (Sheet 2) for entries with candidates.
+_MERGE_COLS = (1, 2, 3)  # columns merged per group: №, CVE ID, Продукт (ТСУ)
 
-    Row numbers match the main table. Candidates are filtered by tier priority:
-    tier-1 (≥0.7) trumps tier-2, tier-2 trumps tier-3.
+
+def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
+    """Write the detailed analysis sheet (Sheet 2).
+
+    - Row numbers match the main table.
+    - Columns №, CVE ID, Продукт (ТСУ) are merged vertically across all candidates
+      of the same entry; a medium-weight separator line divides groups.
+    - Candidates are filtered by tier priority (≥0.7 / ≥0.4 / <0.4).
     """
     ws.title = "Детальный анализ"
 
@@ -235,21 +234,29 @@ def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
         ws.cell(row=1, column=col, value=header)
     _style_header(ws, len(_DETAIL_HEADERS))
 
+    ncols = len(_DETAIL_HEADERS)
     row_idx = 2
+
     for result_num, r in enumerate(results, 1):
         if not r.candidates:
             continue
 
         tsu_display = _vendor_product(r.vulnerability.vendor, r.vulnerability.product)
         filtered = _filter_candidates(r.candidates)
+        if not filtered:
+            continue
 
-        for c in filtered:
+        group_start = row_idx
+
+        for i, c in enumerate(filtered):
             tier = _candidate_tier(c.combined_score)
             ppts_display = _vendor_product(c.software.vendor, c.software.name)
 
-            ws.cell(row=row_idx, column=1, value=result_num)
-            ws.cell(row=row_idx, column=2, value=r.vulnerability.cve_id)
-            ws.cell(row=row_idx, column=3, value=tsu_display)
+            # Shared columns: value only on first row of the group
+            ws.cell(row=row_idx, column=1, value=result_num if i == 0 else None)
+            ws.cell(row=row_idx, column=2, value=r.vulnerability.cve_id if i == 0 else None)
+            ws.cell(row=row_idx, column=3, value=tsu_display if i == 0 else None)
+
             ws.cell(row=row_idx, column=4, value=ppts_display)
             ws.cell(row=row_idx, column=5, value=c.software.id)
 
@@ -265,14 +272,32 @@ def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
 
             ws.cell(row=row_idx, column=10, value=tier)
 
-            for col in range(1, len(_DETAIL_HEADERS) + 1):
+            # Thin borders on all cells of this row
+            for col in range(1, ncols + 1):
                 ws.cell(row=row_idx, column=col).border = _THIN_BORDER
 
             row_idx += 1
 
-    _auto_width(ws, len(_DETAIL_HEADERS))
-    if row_idx > 2:
-        ws.auto_filter.ref = ws.dimensions
+        group_end = row_idx - 1
+
+        # Merge shared columns vertically for this group
+        if group_end > group_start:
+            for col in _MERGE_COLS:
+                ws.merge_cells(
+                    start_row=group_start, start_column=col,
+                    end_row=group_end, end_column=col,
+                )
+                ws.cell(row=group_start, column=col).alignment = Alignment(
+                    horizontal="center", vertical="center", wrap_text=True,
+                )
+
+        # Separator: replace top border of the group's first row with a medium line
+        for col in range(1, ncols + 1):
+            cell = ws.cell(row=group_start, column=col)
+            b = cell.border
+            cell.border = Border(top=_SEP_SIDE, bottom=b.bottom, left=b.left, right=b.right)
+
+    _auto_width(ws, ncols)
 
 
 # ---------------------------------------------------------------------------
