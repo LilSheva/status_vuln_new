@@ -6,6 +6,10 @@ import logging
 import sys
 from pathlib import Path
 
+# Import sentence_transformers before PySide6 to avoid shiboken MemoryError
+# when inspecting large transformers module source at runtime.
+import sentence_transformers  # noqa: F401
+
 from PySide6.QtWidgets import QApplication
 
 from matcher.gui.main_window import MainWindow

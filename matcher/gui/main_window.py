@@ -6,8 +6,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -21,7 +23,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from matcher.config import load_ppts_mappings, load_settings, save_ppts_mappings, save_settings
+from matcher.config import (
+    load_ppts_mappings,
+    load_responsible_data,
+    load_settings,
+    save_ppts_mappings,
+    save_responsible_data,
+    save_settings,
+)
 from matcher.core.pipeline import Pipeline
 from matcher.gui.file_loader import FileLoaderPanel
 from matcher.gui.progress_view import ProgressView
@@ -85,6 +94,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._load_saved_settings()
         self._load_saved_mappings()
+        self._load_responsible_data()
         self._connect_signals()
 
     def _setup_ui(self) -> None:
@@ -147,6 +157,24 @@ class MainWindow(QMainWindow):
         self._btn_export.setEnabled(False)
         btn_row.addWidget(self._btn_export)
 
+        btn_row.addSpacing(20)
+
+        btn_row.addWidget(QLabel("Ответственный:"))
+        self._responsible_combo = QComboBox()
+        self._responsible_combo.setEditable(True)
+        self._responsible_combo.setMinimumWidth(180)
+        self._responsible_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self._responsible_combo.lineEdit().setPlaceholderText("Фамилия И.О.")
+        btn_row.addWidget(self._responsible_combo)
+
+        btn_row.addSpacing(10)
+
+        btn_row.addWidget(QLabel("Публикация:"))
+        self._publication_combo = QComboBox()
+        self._publication_combo.addItems(["БДУ ФСТЕК", "RSS"])
+        self._publication_combo.setMinimumWidth(110)
+        btn_row.addWidget(self._publication_combo)
+
         btn_row.addStretch()
         main_layout.addLayout(btn_row)
 
@@ -172,6 +200,38 @@ class MainWindow(QMainWindow):
         self._file_loader.files_changed.connect(self._on_files_changed)
         self._btn_run.clicked.connect(self._on_run)
         self._btn_export.clicked.connect(self._on_export)
+
+    def _load_responsible_data(self) -> None:
+        """Populate the responsible and publication combos from saved config."""
+        data = load_responsible_data()
+        persons: list[str] = data.get("persons", [])  # type: ignore[assignment]
+        last_resp: str = data.get("last_responsible", "")  # type: ignore[assignment]
+        last_pub: str = data.get("last_publication", "БДУ ФСТЕК")  # type: ignore[assignment]
+
+        self._responsible_combo.addItems(persons)
+        if last_resp:
+            idx = self._responsible_combo.findText(last_resp)
+            if idx >= 0:
+                self._responsible_combo.setCurrentIndex(idx)
+            else:
+                self._responsible_combo.setCurrentText(last_resp)
+
+        idx = self._publication_combo.findText(last_pub)
+        if idx >= 0:
+            self._publication_combo.setCurrentIndex(idx)
+
+    def _save_responsible_data(self) -> None:
+        """Persist current responsible/publication selection; add new names to the list."""
+        responsible = self._responsible_combo.currentText().strip()
+        publication = self._publication_combo.currentText()
+        persons = [
+            self._responsible_combo.itemText(i)
+            for i in range(self._responsible_combo.count())
+        ]
+        if responsible and responsible not in persons:
+            persons.append(responsible)
+            self._responsible_combo.addItem(responsible)
+        save_responsible_data(persons, responsible, publication)
 
     def _load_saved_settings(self) -> None:
         settings = load_settings()
@@ -322,18 +382,31 @@ class MainWindow(QMainWindow):
             from matcher.io.report_writer import write_report
 
             settings = self._settings_panel.get_settings()
-            write_report(Path(path), self._results, settings)
+            results = self._results_view.get_results()
+            responsible = self._responsible_combo.currentText().strip()
+            publication = self._publication_combo.currentText()
+            write_report(Path(path), results, settings, responsible=responsible, publication=publication)
+            self._save_responsible_data()
             self._progress_view.log(f"Отчёт сохранён: {path}")
             self._status_bar.showMessage(f"Отчёт сохранён: {Path(path).name}")
-            QMessageBox.information(self, "Готово", f"Отчёт сохранён:\n{path}")
+
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Готово")
+            msg.setText(f"Отчёт сохранён:\n{path}")
+            msg.addButton("OK", QMessageBox.ButtonRole.AcceptRole)
+            open_btn = msg.addButton("Открыть файл", QMessageBox.ButtonRole.ActionRole)
+            msg.exec()
+            if msg.clickedButton() is open_btn:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
         except Exception as exc:
             logger.exception("Failed to write report")
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить отчёт:\n{exc}")
 
     def closeEvent(self, event) -> None:
-        """Save settings, mappings, and clean up on close."""
+        """Save settings, mappings, responsible data, and clean up on close."""
         settings = self._settings_panel.get_settings()
         save_settings(settings)
         self._save_mappings()
+        self._save_responsible_data()
         self._cleanup_thread()
         super().closeEvent(event)

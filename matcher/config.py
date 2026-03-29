@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 CONFIG_DIR = Path.home() / ".vuln-analyzer"
 CONFIG_FILE = CONFIG_DIR / "matcher_config.json"
 MAPPINGS_FILE = CONFIG_DIR / "ppts_mappings.json"
+RESPONSIBLE_FILE = CONFIG_DIR / "responsible_persons.json"
 
 
 def load_settings() -> PipelineSettings:
@@ -61,6 +62,34 @@ def _dict_to_mapping(d: dict) -> PptsColumnMapping:
         col_name=d.get("col_name"),
         col_vendor=d.get("col_vendor"),
     )
+
+
+def load_responsible_data() -> dict[str, object]:
+    """Load the saved list of responsible persons and last-used values."""
+    if RESPONSIBLE_FILE.exists():
+        try:
+            return json.loads(RESPONSIBLE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            logger.exception("Failed to load responsible data from %s", RESPONSIBLE_FILE)
+    return {"persons": [], "last_responsible": "", "last_publication": "БДУ ФСТЕК"}
+
+
+def save_responsible_data(persons: list[str], last_responsible: str, last_publication: str) -> None:
+    """Persist the list of responsible persons and last-used values."""
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        data = {
+            "persons": persons,
+            "last_responsible": last_responsible,
+            "last_publication": last_publication,
+        }
+        RESPONSIBLE_FILE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        logger.info("Responsible data saved to %s", RESPONSIBLE_FILE)
+    except Exception:
+        logger.exception("Failed to save responsible data to %s", RESPONSIBLE_FILE)
 
 
 def load_ppts_mappings() -> dict[str, PptsColumnMapping]:

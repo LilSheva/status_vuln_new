@@ -246,21 +246,27 @@ class Pipeline:
                     vuln, [], kb_rule=matched_rule
                 )
 
-        # Step 2: Vector search for top-N candidates
-        vector_results = self._vectorizer.search(
+        # Step 2: Vector search — retrieve all top-N regardless of threshold.
+        # Threshold is checked separately: if no candidate meets it, result is НЕТ.
+        # All top-N are kept in candidates so the detail sheet can show them all.
+        all_vector_results = self._vectorizer.search(
             vuln.raw_text,
             index_embeddings,
             software_list,
             top_n=self._settings.top_n,
-            threshold=self._settings.vector_threshold,
+            threshold=0.0,
         )
 
-        if not vector_results:
+        if not all_vector_results:
             return self._status_assigner.assign_status(vuln, [])
 
-        # Step 3: Normalize + Fuzzy + Exact on candidates
-        candidate_sw = [sw for sw, _ in vector_results]
-        vector_scores = [score for _, score in vector_results]
+        # If no candidate meets the configured threshold → НЕТ (no candidates stored)
+        if not any(s >= self._settings.vector_threshold for _, s in all_vector_results):
+            return self._status_assigner.assign_status(vuln, [])
+
+        # Step 3: Normalize + Fuzzy + Exact on ALL top-N candidates
+        candidate_sw = [sw for sw, _ in all_vector_results]
+        vector_scores = [score for _, score in all_vector_results]
 
         normalized_query = normalize_text(
             vuln.raw_text,

@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from shared.constants import STATUS_CONDITIONAL, STATUS_LINUX, STATUS_NO, STATUS_YES
+
 if TYPE_CHECKING:
     from pathlib import Path
 
     from openpyxl.worksheet.worksheet import Worksheet
 
-    from shared.types import AnalysisResult, PipelineSettings
+    from shared.types import AnalysisResult, MatchCandidate, PipelineSettings
 
 logger = logging.getLogger(__name__)
 
@@ -22,18 +25,19 @@ logger = logging.getLogger(__name__)
 _HEADER_FONT = Font(name="Segoe UI", bold=True, size=11, color="FFFFFF")
 _HEADER_FILL = PatternFill(start_color="4A5ABF", end_color="4A5ABF", fill_type="solid")
 _HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_THIN_SIDE = Side(style="thin", color="BFBFBF")
+_MEDIUM_SIDE = Side(style="medium", color="2C3E50")
+
 _THIN_BORDER = Border(
-    left=Side(style="thin", color="D0D0E0"),
-    right=Side(style="thin", color="D0D0E0"),
-    top=Side(style="thin", color="D0D0E0"),
-    bottom=Side(style="thin", color="D0D0E0"),
+    left=_THIN_SIDE, right=_THIN_SIDE, top=_THIN_SIDE, bottom=_THIN_SIDE,
 )
 
-_STATUS_FILLS: dict[str, PatternFill] = {
-    "ДА": PatternFill(start_color="D5F5E3", end_color="D5F5E3", fill_type="solid"),
-    "НЕТ": PatternFill(start_color="FADBD8", end_color="FADBD8", fill_type="solid"),
-    "ЛИНУКС": PatternFill(start_color="D4E6F1", end_color="D4E6F1", fill_type="solid"),
-    "УСЛОВНО": PatternFill(start_color="FCF3CF", end_color="FCF3CF", fill_type="solid"),
+# Text colors for status values (НЕТ=green, ДА=red, ЛИНУКС=blue, УСЛОВНО=orange)
+_STATUS_FONT_COLORS: dict[str, str] = {
+    STATUS_YES: "C0392B",       # red
+    STATUS_NO: "27AE60",        # green
+    STATUS_LINUX: "2980B9",     # blue
+    STATUS_CONDITIONAL: "E67E22",  # orange
 }
 
 _SCORE_FILLS = {
@@ -65,6 +69,19 @@ def _auto_width(ws: Worksheet, col_count: int, max_width: int = 50) -> None:
         ws.column_dimensions[get_column_letter(col)].width = max(adjusted, 10)
 
 
+def _apply_table_borders(ws: Worksheet, last_row: int, col_count: int) -> None:
+    """Apply thin inner borders and medium outer border to the full table (rows 1..last_row)."""
+    for row in range(1, last_row + 1):
+        for col in range(1, col_count + 1):
+            top = _MEDIUM_SIDE if row == 1 else _THIN_SIDE
+            bottom = _MEDIUM_SIDE if row == last_row else _THIN_SIDE
+            left = _MEDIUM_SIDE if col == 1 else _THIN_SIDE
+            right = _MEDIUM_SIDE if col == col_count else _THIN_SIDE
+            ws.cell(row=row, column=col).border = Border(
+                top=top, bottom=bottom, left=left, right=right,
+            )
+
+
 def _score_fill(score: float) -> PatternFill | None:
     """Return a color fill based on score value."""
     if score >= 0.7:
@@ -76,24 +93,72 @@ def _score_fill(score: float) -> PatternFill | None:
     return None
 
 
+def _candidate_tier(score: float) -> int:
+    """Return score tier: 1=high (≥0.7), 2=medium (≥0.4), 3=low (<0.4)."""
+    if score >= 0.7:
+        return 1
+    if score >= 0.4:
+        return 2
+    return 3
+
+
+def _filter_candidates(candidates: list[MatchCandidate]) -> list[MatchCandidate]:
+    """Filter candidates by tier priority.
+
+    - If tier-1 exists: all tier-1 + top-3 tier-2
+    - Else if tier-2 exists: all tier-2 + top-3 tier-3
+    - Else: all tier-3
+    """
+    tier1 = [c for c in candidates if _candidate_tier(c.combined_score) == 1]
+    tier2 = [c for c in candidates if _candidate_tier(c.combined_score) == 2]
+    tier3 = [c for c in candidates if _candidate_tier(c.combined_score) == 3]
+
+    if tier1:
+        return tier1 + tier2[:3]
+    if tier2:
+        return tier2 + tier3[:3]
+    return tier3
+
+
+def _vendor_product(vendor: str, name: str) -> str:
+    """Return 'vendor - product' or just product if vendor is empty."""
+    return f"{vendor} - {name}" if vendor else name
+
+
 # ---------------------------------------------------------------------------
 # Sheet 1: Main table
 # ---------------------------------------------------------------------------
 
 _MAIN_HEADERS = [
-    "CVE ID",
-    "Вендор",
-    "Продукт",
-    "Статус",
-    "Источник решения",
-    "ППТС ID",
+    "№",
+    "Дата",
     "Ответственный",
-    "Лучший кандидат",
-    "Итоговый балл",
+    "Публикация",
+    "Статус",
+    "ID ППТС",
+    "CVE",
+    "CVSS",
+    "Продукт",
+    "Источник",
 ]
 
+# Placeholder for ППТС ID when status is НЕТ / УСЛОВНО / ЛИНУКС
+_NO_PPTS = "----------"
 
-def _write_main_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
+
+def _report_date() -> str:
+    """Return the report date string (yesterday if 00:00–08:00, today otherwise)."""
+    now = datetime.now()
+    date = (now - timedelta(days=1)).date() if now.hour < 8 else now.date()
+    return date.strftime("%d.%m.%Y")
+
+
+def _write_main_sheet(
+    ws: Worksheet,
+    results: list[AnalysisResult],
+    responsible: str,
+    publication: str,
+) -> None:
     """Write the main results table (Sheet 1)."""
     ws.title = "Основная таблица"
 
@@ -101,41 +166,40 @@ def _write_main_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
         ws.cell(row=1, column=col, value=header)
     _style_header(ws, len(_MAIN_HEADERS))
 
-    source_names = {
-        "journal": "Журнал проверок",
-        "knowledge_base": "База знаний",
-        "auto_no_match": "Автоматически (нет совпадений)",
-        "manual": "Ручной разбор",
-    }
+    date_str = _report_date()
 
     for row_idx, r in enumerate(results, 2):
         v = r.vulnerability
-        ws.cell(row=row_idx, column=1, value=v.cve_id)
-        ws.cell(row=row_idx, column=2, value=v.vendor)
-        ws.cell(row=row_idx, column=3, value=v.product)
+        num = row_idx - 1
 
-        status_cell = ws.cell(row=row_idx, column=4, value=r.status or "(пусто)")
-        if r.status in _STATUS_FILLS:
-            status_cell.fill = _STATUS_FILLS[r.status]
+        # ППТС ID logic
+        if r.status in (STATUS_NO, STATUS_CONDITIONAL, STATUS_LINUX):
+            ppts_value = _NO_PPTS
+        elif r.status == STATUS_YES:
+            ppts_value = r.ppts_id or ""
+        else:
+            ppts_value = ""
+
+        ws.cell(row=row_idx, column=1, value=num)
+        ws.cell(row=row_idx, column=2, value=date_str)
+        ws.cell(row=row_idx, column=3, value=responsible)
+        ws.cell(row=row_idx, column=4, value=publication)
+
+        # Status: empty status → empty cell (None); colored text, no fill
+        status_cell = ws.cell(row=row_idx, column=5, value=r.status or None)
+        if r.status in _STATUS_FONT_COLORS:
+            status_cell.font = Font(color=_STATUS_FONT_COLORS[r.status], bold=True)
         status_cell.alignment = Alignment(horizontal="center")
 
-        ws.cell(row=row_idx, column=5, value=source_names.get(r.status_source, r.status_source))
-        ws.cell(row=row_idx, column=6, value=r.ppts_id or "")
-        ws.cell(row=row_idx, column=7, value=r.responsible or "")
+        ws.cell(row=row_idx, column=6, value=ppts_value)
+        ws.cell(row=row_idx, column=7, value=v.cve_id)
+        ws.cell(row=row_idx, column=8, value=v.cvss or "")
+        ws.cell(row=row_idx, column=9, value=_vendor_product(v.vendor, v.product))
+        ws.cell(row=row_idx, column=10, value=v.source_url or "")
 
-        if r.candidates:
-            best = r.candidates[0]
-            ws.cell(row=row_idx, column=8, value=best.software.name)
-            score_cell = ws.cell(row=row_idx, column=9, value=round(best.combined_score, 4))
-            fill = _score_fill(best.combined_score)
-            if fill:
-                score_cell.fill = fill
-        else:
-            ws.cell(row=row_idx, column=8, value="")
-            ws.cell(row=row_idx, column=9, value="")
-
-        for col in range(1, len(_MAIN_HEADERS) + 1):
-            ws.cell(row=row_idx, column=col).border = _THIN_BORDER
+    # Apply borders to the entire table: medium outer edge, thin inner lines.
+    last_data_row = 1 + len(results)  # 1 header + N data rows
+    _apply_table_borders(ws, last_data_row, len(_MAIN_HEADERS))
 
     _auto_width(ws, len(_MAIN_HEADERS))
     ws.auto_filter.ref = ws.dimensions
@@ -146,6 +210,7 @@ def _write_main_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
 # ---------------------------------------------------------------------------
 
 _DETAIL_HEADERS = [
+    "№",
     "CVE ID",
     "Продукт (ТСУ)",
     "Кандидат (ППТС)",
@@ -159,7 +224,11 @@ _DETAIL_HEADERS = [
 
 
 def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
-    """Write the detailed analysis sheet (Sheet 2) for entries needing manual review."""
+    """Write the detailed analysis sheet (Sheet 2) for entries with candidates.
+
+    Row numbers match the main table. Candidates are filtered by tier priority:
+    tier-1 (≥0.7) trumps tier-2, tier-2 trumps tier-3.
+    """
     ws.title = "Детальный анализ"
 
     for col, header in enumerate(_DETAIL_HEADERS, 1):
@@ -167,27 +236,34 @@ def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
     _style_header(ws, len(_DETAIL_HEADERS))
 
     row_idx = 2
-    for r in results:
+    for result_num, r in enumerate(results, 1):
         if not r.candidates:
             continue
 
-        for rank, c in enumerate(r.candidates, 1):
-            ws.cell(row=row_idx, column=1, value=r.vulnerability.cve_id)
-            ws.cell(row=row_idx, column=2, value=r.vulnerability.product)
-            ws.cell(row=row_idx, column=3, value=c.software.name)
-            ws.cell(row=row_idx, column=4, value=c.software.id)
+        tsu_display = _vendor_product(r.vulnerability.vendor, r.vulnerability.product)
+        filtered = _filter_candidates(r.candidates)
 
-            vs_cell = ws.cell(row=row_idx, column=5, value=round(c.vector_score, 4))
-            fs_cell = ws.cell(row=row_idx, column=6, value=round(c.fuzzy_score, 2))
-            es_cell = ws.cell(row=row_idx, column=7, value=round(c.exact_score, 2))
-            cs_cell = ws.cell(row=row_idx, column=8, value=round(c.combined_score, 4))
+        for c in filtered:
+            tier = _candidate_tier(c.combined_score)
+            ppts_display = _vendor_product(c.software.vendor, c.software.name)
+
+            ws.cell(row=row_idx, column=1, value=result_num)
+            ws.cell(row=row_idx, column=2, value=r.vulnerability.cve_id)
+            ws.cell(row=row_idx, column=3, value=tsu_display)
+            ws.cell(row=row_idx, column=4, value=ppts_display)
+            ws.cell(row=row_idx, column=5, value=c.software.id)
+
+            vs_cell = ws.cell(row=row_idx, column=6, value=round(c.vector_score, 4))
+            ws.cell(row=row_idx, column=7, value=round(c.fuzzy_score, 2))
+            ws.cell(row=row_idx, column=8, value=round(c.exact_score, 2))
+            cs_cell = ws.cell(row=row_idx, column=9, value=round(c.combined_score, 4))
 
             for cell in (vs_cell, cs_cell):
                 fill = _score_fill(cell.value if cell.value else 0)
                 if fill:
                     cell.fill = fill
 
-            ws.cell(row=row_idx, column=9, value=rank)
+            ws.cell(row=row_idx, column=10, value=tier)
 
             for col in range(1, len(_DETAIL_HEADERS) + 1):
                 ws.cell(row=row_idx, column=col).border = _THIN_BORDER
@@ -223,6 +299,11 @@ def _write_reference_sheet(ws: Worksheet, settings: PipelineSettings) -> None:
         ("Exact Score", "0 / 50 / 75 / 100", "100=точное совпадение, 75=подстрока, 50=все слова, 0=нет"),
         ("Итоговый балл", "0.0 — 1.0", "Взвешенная комбинация: 50% vector + 30% fuzzy + 20% exact"),
         ("", "", ""),
+        ("Ранг", "Порог", "Описание"),
+        ("1", "≥ 0.7", "Высокая уверенность"),
+        ("2", "≥ 0.4", "Средняя уверенность"),
+        ("3", "< 0.4", "Низкая уверенность"),
+        ("", "", ""),
         ("Статус", "Источник", "Описание"),
         ("ДА", "Только БЗ", "ПО присутствует в инфраструктуре (назначается только через базу знаний)"),
         ("НЕТ", "Авто / БЗ", "ПО отсутствует в инфраструктуре"),
@@ -236,7 +317,6 @@ def _write_reference_sheet(ws: Worksheet, settings: PipelineSettings) -> None:
         ws.cell(row=row_idx, column=2, value=b)
         ws.cell(row=row_idx, column=3, value=c)
 
-    # Style header rows
     for col in range(1, 4):
         cell = ws.cell(row=1, column=col)
         cell.font = _HEADER_FONT
@@ -255,6 +335,8 @@ def write_report(
     path: Path,
     results: list[AnalysisResult],
     settings: PipelineSettings,
+    responsible: str = "",
+    publication: str = "БДУ ФСТЕК",
 ) -> None:
     """Generate a full XLSX report with 3 sheets.
 
@@ -262,11 +344,13 @@ def write_report(
         path: Output file path.
         results: Analysis results from the pipeline.
         settings: Pipeline settings used for this run.
+        responsible: Analyst name for the report.
+        publication: Publication source label (БДУ ФСТЕК or RSS).
     """
     wb = Workbook()
 
     ws_main = wb.active
-    _write_main_sheet(ws_main, results)
+    _write_main_sheet(ws_main, results, responsible, publication)
 
     ws_detail = wb.create_sheet()
     _write_detail_sheet(ws_detail, results)
