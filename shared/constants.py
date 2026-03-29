@@ -39,3 +39,4 @@ DB_DEFAULT_FILENAME = "knowledge.db"
 
 # --- Embedding model ---
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL_MULTILINGUAL = "paraphrase-multilingual-MiniLM-L12-v2"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -10,6 +11,9 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from shared.constants import DEFAULT_TOP_N, DEFAULT_VECTOR_THRESHOLD, EMBEDDING_MODEL_NAME
+
+# Directory with bundled models (project_root/models/)
+_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models"
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -27,10 +31,19 @@ class Vectorizer:
         self._model: SentenceTransformer | None = None
 
     def _ensure_model(self) -> SentenceTransformer:
-        """Lazy-load the embedding model."""
+        """Lazy-load the embedding model.
+
+        Looks for a bundled copy in ``models/<name>`` first,
+        falls back to downloading from HuggingFace Hub.
+        """
         if self._model is None:
-            logger.info("Loading embedding model: %s", self._model_name)
-            self._model = SentenceTransformer(self._model_name)
+            local_path = _MODELS_DIR / self._model_name
+            if local_path.is_dir():
+                logger.info("Loading bundled model: %s", local_path)
+                self._model = SentenceTransformer(str(local_path))
+            else:
+                logger.info("Downloading model from HuggingFace: %s", self._model_name)
+                self._model = SentenceTransformer(self._model_name)
             logger.info("Model loaded successfully")
         return self._model
 

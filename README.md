@@ -20,6 +20,26 @@ python -m matcher.main
 python -m knowledge_base.main
 ```
 
+### Модель для векторизации
+
+Модель `all-MiniLM-L6-v2` уже включена в репозиторий (`models/`), скачивать ничего не нужно.
+
+Если нужна мультиязычная модель (лучше для русского языка):
+
+```bash
+python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
+```
+
+После скачивания скопируйте модель из кэша в `models/paraphrase-multilingual-MiniLM-L12-v2/`:
+
+```
+# Windows
+%USERPROFILE%\.cache\huggingface\hub\models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2\snapshots\<hash>\
+
+# Скопировать всё содержимое в:
+models/paraphrase-multilingual-MiniLM-L12-v2/
+```
+
 ### Тесты
 
 ```bash
