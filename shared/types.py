@@ -118,3 +118,8 @@ class PipelineSettings:
     use_knowledge_base: bool = False
     kb_path: str = ""
     journal_paths: list[str] = field(default_factory=list)
+    theme: str = "Светлая"
+    detail_primary_limit: int = 0    # 0 = show all from primary tier
+    detail_secondary_limit: int = 3  # top N from secondary tier
+    use_preprocessing: bool = True
+    scripts_dir: str = "scripts"

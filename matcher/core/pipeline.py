@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from shared.constants import SOURCE_JOURNAL
@@ -13,6 +15,7 @@ from shared.types import (
     JournalEntry,
     MatchCandidate,
     PipelineSettings,
+    ScriptConfig,
     Software,
     Vulnerability,
 )
@@ -156,19 +159,48 @@ class Pipeline:
     def _run_preprocessing(
         self, vulnerabilities: list[Vulnerability]
     ) -> list[Vulnerability]:
-        """Run preprocessing scripts on vulnerabilities."""
-        if not self._settings.use_knowledge_base or not self._settings.kb_path:
+        """Run preprocessing scripts on vulnerabilities.
+
+        If KB is enabled, load script configs from SQLite.
+        Otherwise, auto-discover .py scripts from scripts_dir.
+        """
+        if not self._settings.use_preprocessing:
             return vulnerabilities
 
-        try:
-            from shared.db.models import get_connection
+        configs: list[ScriptConfig] = []
 
-            conn = get_connection(self._settings.kb_path)
-            configs = get_enabled_scripts(conn)
-            conn.close()
-        except Exception:
-            logger.exception("Failed to load script configs")
-            return vulnerabilities
+        # Try loading from KB first
+        if self._settings.use_knowledge_base and self._settings.kb_path:
+            try:
+                from shared.db.models import get_connection
+
+                conn = get_connection(self._settings.kb_path)
+                configs = get_enabled_scripts(conn)
+                conn.close()
+            except Exception:
+                logger.exception("Failed to load script configs from KB")
+
+        # Auto-discover scripts if no KB configs available
+        if not configs:
+            scripts_dir = Path(self._settings.scripts_dir)
+            if scripts_dir.is_dir():
+                for py_file in sorted(scripts_dir.glob("*.py")):
+                    if py_file.name.startswith("_"):
+                        continue
+                    configs.append(
+                        ScriptConfig(
+                            script_path=str(py_file),
+                            condition="",
+                            priority=0,
+                            enabled=True,
+                        )
+                    )
+                if configs:
+                    logger.info(
+                        "Auto-discovered %d preprocessing scripts from %s",
+                        len(configs),
+                        scripts_dir,
+                    )
 
         if not configs:
             return vulnerabilities
@@ -219,6 +251,13 @@ class Pipeline:
         journal_index: dict[str, JournalEntry],
     ) -> AnalysisResult:
         """Process a single vulnerability through the full matching pipeline."""
+
+        # CVE format sanity check
+        if vuln.cve_id and not re.match(r"CVE-\d{4}-\d{4,}", vuln.cve_id):
+            logger.info(
+                "CVE не найден в базе. Возможно, это 0-day... или опечатка: %s",
+                vuln.cve_id,
+            )
 
         # Step 0: Check journal by CVE
         if journal_index and vuln.cve_id:

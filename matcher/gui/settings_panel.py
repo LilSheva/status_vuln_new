@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -27,6 +28,7 @@ from shared.constants import (
     DEFAULT_TOP_N,
     DEFAULT_VECTOR_THRESHOLD,
 )
+from shared.themes import THEME_NAMES, ThemeManager
 from shared.types import PipelineSettings
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,13 @@ class SettingsPanel(QWidget):
     def _setup_ui(self) -> None:
         layout = QFormLayout(self)
         layout.setSpacing(10)
+
+        # Theme selector
+        self._theme_combo = QComboBox()
+        self._theme_combo.addItems(THEME_NAMES)
+        self._theme_combo.setToolTip("Тема оформления приложения")
+        self._theme_combo.currentTextChanged.connect(self._on_theme_changed)
+        layout.addRow("Тема:", self._theme_combo)
 
         # Top-N candidates
         self._top_n = QSpinBox()
@@ -87,6 +96,29 @@ class SettingsPanel(QWidget):
         self._translit_dir.currentIndexChanged.connect(self.settings_changed)
         layout.addRow("Транслитерация:", self._translit_dir)
 
+        # Detail primary limit
+        self._detail_primary_limit = QSpinBox()
+        self._detail_primary_limit.setRange(0, 100)
+        self._detail_primary_limit.setValue(0)
+        self._detail_primary_limit.setToolTip("Макс. кандидатов из основного яруса (0 = все)")
+        self._detail_primary_limit.valueChanged.connect(self.settings_changed)
+        layout.addRow("Основной ярус (0=все):", self._detail_primary_limit)
+
+        # Detail secondary limit
+        self._detail_secondary_limit = QSpinBox()
+        self._detail_secondary_limit.setRange(0, 100)
+        self._detail_secondary_limit.setValue(3)
+        self._detail_secondary_limit.setToolTip("Макс. кандидатов из следующего яруса")
+        self._detail_secondary_limit.valueChanged.connect(self.settings_changed)
+        layout.addRow("Следующий ярус:", self._detail_secondary_limit)
+
+        # Preprocessing toggle
+        self._use_preprocessing = QCheckBox("Препроцессинг")
+        self._use_preprocessing.setChecked(True)
+        self._use_preprocessing.setToolTip("Запускать плагины препроцессинга из папки scripts/")
+        self._use_preprocessing.toggled.connect(self.settings_changed)
+        layout.addRow("", self._use_preprocessing)
+
         # Knowledge base toggle + path
         kb_widget = QWidget()
         kb_layout = QVBoxLayout(kb_widget)
@@ -109,13 +141,21 @@ class SettingsPanel(QWidget):
 
         self._kb_browse_btn = QPushButton("Обзор...")
         self._kb_browse_btn.setObjectName("btn_secondary")
-        self._kb_browse_btn.setFixedWidth(80)
+        self._kb_browse_btn.setMinimumWidth(70)
         self._kb_browse_btn.setEnabled(False)
         self._kb_browse_btn.clicked.connect(self._browse_kb)
         kb_path_row.addWidget(self._kb_browse_btn)
 
         kb_layout.addLayout(kb_path_row)
         layout.addRow("База знаний:", kb_widget)
+
+    def _on_theme_changed(self, name: str) -> None:
+        """Apply the selected theme immediately."""
+        app = QApplication.instance()
+        if app is not None:
+            theme_mgr = ThemeManager("matcher")
+            app.setStyleSheet(theme_mgr.get_stylesheet(name))
+        self.settings_changed.emit()
 
     def _on_kb_toggled(self, checked: bool) -> None:
         self._kb_path_edit.setEnabled(checked)
@@ -143,6 +183,10 @@ class SettingsPanel(QWidget):
             min_word_length=self._min_word_length.value(),
             use_knowledge_base=self._use_kb.isChecked(),
             kb_path=self._kb_path_edit.text(),
+            theme=self._theme_combo.currentText(),
+            detail_primary_limit=self._detail_primary_limit.value(),
+            detail_secondary_limit=self._detail_secondary_limit.value(),
+            use_preprocessing=self._use_preprocessing.isChecked(),
         )
 
     def set_settings(self, settings: PipelineSettings) -> None:
@@ -156,7 +200,19 @@ class SettingsPanel(QWidget):
         if idx >= 0:
             self._translit_dir.setCurrentIndex(idx)
 
+        self._detail_primary_limit.setValue(settings.detail_primary_limit)
+        self._detail_secondary_limit.setValue(settings.detail_secondary_limit)
+        self._use_preprocessing.setChecked(settings.use_preprocessing)
+
         self._use_kb.setChecked(settings.use_knowledge_base)
         self._kb_path_edit.setText(settings.kb_path)
         self._kb_path_edit.setEnabled(settings.use_knowledge_base)
         self._kb_browse_btn.setEnabled(settings.use_knowledge_base)
+
+        # Theme — block signals to avoid triggering a stylesheet reload during init
+        theme = getattr(settings, "theme", "Светлая")
+        idx = self._theme_combo.findText(theme)
+        if idx >= 0:
+            self._theme_combo.blockSignals(True)
+            self._theme_combo.setCurrentIndex(idx)
+            self._theme_combo.blockSignals(False)

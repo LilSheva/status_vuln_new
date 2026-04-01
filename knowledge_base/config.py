@@ -15,6 +15,7 @@ _DEFAULTS = {
     "last_db_path": "",
     "window_width": 1100,
     "window_height": 700,
+    "theme": "Светлая",
 }
 
 

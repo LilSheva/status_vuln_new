@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
+from knowledge_base.config import load_config
 from knowledge_base.gui.main_window import MainWindow
+from shared.themes import ThemeManager
 
 logger = logging.getLogger(__name__)
-
-_STYLES_PATH = Path(__file__).parent / "gui" / "styles" / "theme.qss"
 
 
 def _setup_logging() -> None:
@@ -31,12 +30,11 @@ def main() -> None:
 
     app = QApplication(sys.argv)
 
-    if _STYLES_PATH.exists():
-        stylesheet = _STYLES_PATH.read_text(encoding="utf-8")
-        app.setStyleSheet(stylesheet)
-        logger.info("Loaded theme from %s", _STYLES_PATH)
-    else:
-        logger.warning("Theme file not found: %s", _STYLES_PATH)
+    theme_mgr = ThemeManager("knowledge_base")
+    config = load_config()
+    theme_name = config.get("theme", "Светлая")
+    app.setStyleSheet(theme_mgr.get_stylesheet(theme_name))
+    logger.info("Applied theme: %s", theme_name)
 
     window = MainWindow()
     window.show()

@@ -20,6 +20,7 @@ from shared.types import (
     AnalysisResult,
     KnowledgeBaseRule,
     MatchCandidate,
+    Software,
     Vulnerability,
 )
 
@@ -70,11 +71,23 @@ class StatusAssigner:
             AnalysisResult with the assigned status.
         """
         if kb_rule is not None:
+            kb_candidate = MatchCandidate(
+                software=Software(
+                    id=kb_rule.ppts_id or "",
+                    name=kb_rule.pattern,
+                    vendor=kb_rule.vendor_pattern or "",
+                    source="knowledge_base",
+                ),
+                vector_score=1.0,
+                fuzzy_score=100.0,
+                exact_score=100.0,
+                combined_score=1.0,
+            )
             return AnalysisResult(
                 vulnerability=vuln,
                 status=kb_rule.status,
                 status_source=SOURCE_KNOWLEDGE_BASE,
-                candidates=candidates,
+                candidates=[kb_candidate],
                 ppts_id=kb_rule.ppts_id,
             )
 

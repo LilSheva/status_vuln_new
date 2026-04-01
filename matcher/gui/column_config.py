@@ -108,7 +108,7 @@ class ColumnConfigDialog(QDialog):
 
         # Preview
         preview_label = QLabel("Первые строки для проверки будут видны после сохранения.")
-        preview_label.setStyleSheet("color: #7a7a9a; font-size: 12px;")
+        preview_label.setObjectName("preview_hint")
         layout.addWidget(preview_label)
 
         # Buttons

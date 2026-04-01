@@ -8,6 +8,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
     QDialog,
     QFileDialog,
     QGroupBox,
@@ -27,6 +29,8 @@ from knowledge_base.gui.rule_tester import RuleTesterDialog
 from knowledge_base.gui.rules_table import RulesTable
 from shared.db.models import init_db
 from shared.db.repository import create_rule, delete_rule, get_rule_by_id, update_rule
+from shared.gui.easter_eggs import KonamiDetector, TitleClickDetector
+from shared.themes import THEME_NAMES, ThemeManager
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +42,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._conn: sqlite3.Connection | None = None
         self._db_path: str = ""
+        self._theme_mgr = ThemeManager("knowledge_base")
         self._setup_ui()
+        self._setup_easter_eggs()
         self._connect_signals()
         self._try_load_last_db()
 
@@ -77,18 +83,18 @@ class MainWindow(QMainWindow):
         db_row.addWidget(QLabel("База данных:"))
 
         self._db_label = QLabel("Не выбрана")
-        self._db_label.setStyleSheet("color: #7a7a9a;")
+        self._db_label.setObjectName("db_label_inactive")
         db_row.addWidget(self._db_label, 1)
 
         btn_open = QPushButton("Открыть")
         btn_open.setObjectName("btn_secondary")
-        btn_open.setFixedWidth(90)
+        btn_open.setMinimumWidth(80)
         btn_open.clicked.connect(self._on_open_db)
         db_row.addWidget(btn_open)
 
         btn_new = QPushButton("Создать")
         btn_new.setObjectName("btn_secondary")
-        btn_new.setFixedWidth(90)
+        btn_new.setMinimumWidth(80)
         btn_new.clicked.connect(self._on_new_db)
         db_row.addWidget(btn_new)
 
@@ -118,6 +124,17 @@ class MainWindow(QMainWindow):
         btn_row.addWidget(self._btn_delete)
 
         btn_row.addStretch()
+
+        btn_row.addWidget(QLabel("Тема:"))
+        self._theme_combo = QComboBox()
+        self._theme_combo.addItems(THEME_NAMES)
+        config = load_config()
+        current_theme = config.get("theme", "Светлая")
+        idx = THEME_NAMES.index(current_theme) if current_theme in THEME_NAMES else 0
+        self._theme_combo.setCurrentIndex(idx)
+        self._theme_combo.currentTextChanged.connect(self._on_theme_changed)
+        btn_row.addWidget(self._theme_combo)
+
         main_layout.addLayout(btn_row)
 
         # --- Rules table ---
@@ -157,7 +174,9 @@ class MainWindow(QMainWindow):
             self._db_path = path
             self._db_label.setText(Path(path).name)
             self._db_label.setToolTip(path)
-            self._db_label.setStyleSheet("color: #2e2e4e; font-weight: 500;")
+            self._db_label.setObjectName("db_label_active")
+            self._db_label.style().unpolish(self._db_label)
+            self._db_label.style().polish(self._db_label)
             self._rules_table.set_connection(self._conn)
             self._btn_add.setEnabled(True)
             self._status_bar.showMessage(f"Открыта: {Path(path).name}")
@@ -282,6 +301,60 @@ class MainWindow(QMainWindow):
             self._btn_test.setEnabled(False)
             self._btn_delete.setEnabled(False)
             self._status_bar.showMessage(f"Правило #{rule_id} удалено")
+
+    # ------------------------------------------------------------------
+    # Easter eggs
+    # ------------------------------------------------------------------
+
+    def _setup_easter_eggs(self) -> None:
+        """Install hidden interaction detectors."""
+        title_label = self.findChild(QLabel, "title_label")
+        if title_label is not None:
+            title_detector = TitleClickDetector(parent=self)
+            title_detector.activated.connect(self._show_about)
+            title_label.installEventFilter(title_detector)
+
+        konami = KonamiDetector(parent=self)
+        konami.activated.connect(self._on_konami)
+        self.installEventFilter(konami)
+
+    @Slot()
+    def _on_konami(self) -> None:
+        """Brief visual effect when the Konami code is entered."""
+        self._status_bar.showMessage("Konami code activated! You are a power user.", 3000)
+        # Flash the window title briefly
+        original = self.windowTitle()
+        self.setWindowTitle("*** KONAMI ***")
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(1500, lambda: self.setWindowTitle(original))
+
+    @Slot()
+    def _show_about(self) -> None:
+        """Show hidden about dialog."""
+        QMessageBox.information(
+            self,
+            "О программе",
+            "База Знаний v2.0\n\n"
+            "Менеджер правил сопоставления\n"
+            "для Анализатора Статусов Уязвимостей.\n\n"
+            "Вы нашли секрет! :)",
+        )
+
+    # ------------------------------------------------------------------
+    # Theme switching
+    # ------------------------------------------------------------------
+
+    @Slot(str)
+    def _on_theme_changed(self, theme_name: str) -> None:
+        """Apply the selected theme and persist the choice."""
+        app = QApplication.instance()
+        if app is not None:
+            app.setStyleSheet(self._theme_mgr.get_stylesheet(theme_name))
+
+        config = load_config()
+        config["theme"] = theme_name
+        save_config(config)
+        logger.info("Theme changed to: %s", theme_name)
 
     def closeEvent(self, event) -> None:
         """Save config and close DB."""

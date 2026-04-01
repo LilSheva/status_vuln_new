@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, Qt, QThread, QUrl, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
@@ -37,6 +37,7 @@ from matcher.gui.progress_view import ProgressView
 from matcher.gui.results_view import ResultsView
 from matcher.gui.settings_panel import SettingsPanel
 from matcher.io.readers import ReaderError, read_journal, read_ppts, read_tsu
+from shared.gui.easter_eggs import KonamiDetector, TitleClickDetector
 
 if TYPE_CHECKING:
     from shared.types import AnalysisResult, JournalEntry, PipelineSettings, Software, Vulnerability
@@ -118,6 +119,11 @@ class MainWindow(QMainWindow):
         title.setObjectName("title_label")
         header_layout.addWidget(title)
 
+        # Easter egg: 7 fast clicks on title -> about dialog
+        self._title_click_detector = TitleClickDetector(parent=self)
+        title.installEventFilter(self._title_click_detector)
+        self._title_click_detector.activated.connect(self._show_about)
+
         subtitle = QLabel("Автоматический анализ ТСУ vs ППТС")
         subtitle.setObjectName("subtitle_label")
         header_layout.addWidget(subtitle)
@@ -195,6 +201,11 @@ class MainWindow(QMainWindow):
         self._status_bar = QStatusBar()
         self.setStatusBar(self._status_bar)
         self._status_bar.showMessage("Готов")
+
+        # Easter egg: Konami code -> flash status bar
+        self._konami_detector = KonamiDetector(parent=self)
+        self.installEventFilter(self._konami_detector)
+        self._konami_detector.activated.connect(self._on_konami)
 
     def _connect_signals(self) -> None:
         self._file_loader.files_changed.connect(self._on_files_changed)
@@ -401,6 +412,30 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             logger.exception("Failed to write report")
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить отчёт:\n{exc}")
+
+    def _show_about(self) -> None:
+        """Show the about dialog (easter egg)."""
+        QMessageBox.about(
+            self,
+            "О программе",
+            "Анализатор Статусов Уязвимостей v2.0\n\n"
+            "Разработано с помощью Claude\n"
+            "PySide6 + sentence-transformers\n\n"
+            "Защищаем инфраструктуру, один CVE за раз",
+        )
+
+    def _on_konami(self) -> None:
+        """Flash the status bar as a Konami code reward."""
+        original = self._status_bar.styleSheet()
+        self._status_bar.setStyleSheet("background-color: #27ae60; color: white;")
+        self._status_bar.showMessage("Konami code activated!")
+        QTimer.singleShot(
+            1500,
+            lambda: (
+                self._status_bar.setStyleSheet(original),
+                self._status_bar.showMessage("Готов"),
+            ),
+        )
 
     def closeEvent(self, event) -> None:
         """Save settings, mappings, responsible data, and clean up on close."""

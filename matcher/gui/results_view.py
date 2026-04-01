@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from shared.constants import STATUS_CONDITIONAL, STATUS_EMPTY, STATUS_LINUX, STATUS_NO, STATUS_YES
+from shared.gui.marquee_header import MarqueeHeaderView
 
 if TYPE_CHECKING:
     from shared.types import AnalysisResult
@@ -123,10 +124,11 @@ class ResultsView(QWidget):
         self._table.verticalHeader().setDefaultSectionSize(28)
         self._table.setItemDelegate(_EditDelegate(self._table))
 
-        header = self._table.horizontalHeader()
-        header.setStretchLastSection(True)
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        header.setMinimumSectionSize(60)
+        marquee_header = MarqueeHeaderView(Qt.Orientation.Horizontal, self._table)
+        self._table.setHorizontalHeader(marquee_header)
+        marquee_header.setStretchLastSection(True)
+        marquee_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        marquee_header.setMinimumSectionSize(60)
 
         self._table.itemChanged.connect(self._on_item_changed)
 
@@ -143,6 +145,11 @@ class ResultsView(QWidget):
             vuln = result.vulnerability
 
             self._set_cell(row, 0, vuln.cve_id, row)
+            # Easter egg: CVSS 10.0 gets a special tooltip
+            if getattr(vuln, "cvss", "") == "10.0":
+                cve_item = self._table.item(row, 0)
+                if cve_item is not None:
+                    cve_item.setToolTip("F")
             self._set_cell(row, 1, vuln.vendor, row)
             self._set_cell(row, 2, vuln.product, row)
 

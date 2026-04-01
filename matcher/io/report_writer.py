@@ -96,21 +96,32 @@ def _candidate_tier(score: float) -> int:
     return 3
 
 
-def _filter_candidates(candidates: list[MatchCandidate]) -> list[MatchCandidate]:
+def _filter_candidates(
+    candidates: list[MatchCandidate],
+    primary_limit: int = 0,
+    secondary_limit: int = 3,
+) -> list[MatchCandidate]:
     """Filter candidates by tier priority.
 
-    - If tier-1 exists: all tier-1 + top-3 tier-2
-    - Else if tier-2 exists: all tier-2 + top-3 tier-3
+    - If tier-1 exists: tier-1 (limited by primary_limit, 0=all) + top secondary_limit tier-2
+    - Else if tier-2 exists: tier-2 (limited by primary_limit, 0=all) + top secondary_limit tier-3
     - Else: all tier-3
+
+    Args:
+        candidates: All match candidates.
+        primary_limit: Max candidates from the primary tier (0 = show all).
+        secondary_limit: Max candidates from the secondary tier.
     """
     tier1 = [c for c in candidates if _candidate_tier(c.combined_score) == 1]
     tier2 = [c for c in candidates if _candidate_tier(c.combined_score) == 2]
     tier3 = [c for c in candidates if _candidate_tier(c.combined_score) == 3]
 
     if tier1:
-        return tier1 + tier2[:3]
+        primary = tier1 if primary_limit == 0 else tier1[:primary_limit]
+        return primary + tier2[:secondary_limit]
     if tier2:
-        return tier2 + tier3[:3]
+        primary = tier2 if primary_limit == 0 else tier2[:primary_limit]
+        return primary + tier3[:secondary_limit]
     return tier3
 
 
@@ -214,13 +225,27 @@ _DETAIL_HEADERS = [
     "Exact Score",
     "Итоговый балл",
     "Ранг",
+    "Источник",
 ]
 
 
 _MERGE_COLS = (1, 2, 3)  # columns merged per group: №, CVE ID, Продукт (ТСУ)
 
 
-def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
+def _source_label(status_source: str) -> str:
+    """Map status_source to a human-readable label for the detail sheet."""
+    if status_source == "knowledge_base":
+        return "БЗ"
+    if status_source == "journal":
+        return "Журнал"
+    return "Вектор"
+
+
+def _write_detail_sheet(
+    ws: Worksheet,
+    results: list[AnalysisResult],
+    settings: PipelineSettings | None = None,
+) -> None:
     """Write the detailed analysis sheet (Sheet 2).
 
     - Row numbers match the main table.
@@ -234,6 +259,9 @@ def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
         ws.cell(row=1, column=col, value=header)
     _style_header(ws, len(_DETAIL_HEADERS))
 
+    primary_limit = settings.detail_primary_limit if settings else 0
+    secondary_limit = settings.detail_secondary_limit if settings else 3
+
     ncols = len(_DETAIL_HEADERS)
     row_idx = 2
 
@@ -242,11 +270,12 @@ def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
             continue
 
         tsu_display = _vendor_product(r.vulnerability.vendor, r.vulnerability.product)
-        filtered = _filter_candidates(r.candidates)
+        filtered = _filter_candidates(r.candidates, primary_limit, secondary_limit)
         if not filtered:
             continue
 
         group_start = row_idx
+        source_label = _source_label(r.status_source)
 
         for i, c in enumerate(filtered):
             tier = _candidate_tier(c.combined_score)
@@ -271,6 +300,7 @@ def _write_detail_sheet(ws: Worksheet, results: list[AnalysisResult]) -> None:
                     cell.fill = fill
 
             ws.cell(row=row_idx, column=10, value=tier)
+            ws.cell(row=row_idx, column=11, value=source_label)
 
             # Thin borders on all cells of this row
             for col in range(1, ncols + 1):
@@ -378,7 +408,7 @@ def write_report(
     _write_main_sheet(ws_main, results, responsible, publication)
 
     ws_detail = wb.create_sheet()
-    _write_detail_sheet(ws_detail, results)
+    _write_detail_sheet(ws_detail, results, settings)
 
     ws_ref = wb.create_sheet()
     _write_reference_sheet(ws_ref, settings)

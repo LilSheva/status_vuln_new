@@ -51,7 +51,7 @@ class FileSelector(QWidget):
 
         btn = QPushButton("Обзор...")
         btn.setObjectName("btn_secondary")
-        btn.setFixedWidth(100)
+        btn.setMinimumWidth(80)
         btn.clicked.connect(self._browse)
         layout.addWidget(btn)
 
@@ -103,13 +103,13 @@ class PptsSelector(QWidget):
 
         btn_browse = QPushButton("Обзор...")
         btn_browse.setObjectName("btn_secondary")
-        btn_browse.setFixedWidth(80)
+        btn_browse.setMinimumWidth(70)
         btn_browse.clicked.connect(self._browse)
         layout.addWidget(btn_browse)
 
         self._btn_columns = QPushButton("Столбцы...")
         self._btn_columns.setObjectName("btn_secondary")
-        self._btn_columns.setFixedWidth(80)
+        self._btn_columns.setMinimumWidth(70)
         self._btn_columns.setEnabled(False)
         self._btn_columns.setToolTip("Настроить столбцы ID / Наименование / Вендор")
         self._btn_columns.clicked.connect(self._configure_columns)
@@ -185,13 +185,13 @@ class JournalSelector(QWidget):
 
         btn_add = QPushButton("Добавить")
         btn_add.setObjectName("btn_secondary")
-        btn_add.setFixedWidth(90)
+        btn_add.setMinimumWidth(80)
         btn_add.clicked.connect(self._add_files)
         header_row.addWidget(btn_add)
 
         btn_clear = QPushButton("Очистить")
         btn_clear.setObjectName("btn_secondary")
-        btn_clear.setFixedWidth(90)
+        btn_clear.setMinimumWidth(80)
         btn_clear.clicked.connect(self._clear)
         header_row.addWidget(btn_clear)
 

@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
 
 # Import sentence_transformers before PySide6 to avoid shiboken MemoryError
 # when inspecting large transformers module source at runtime.
 import sentence_transformers  # noqa: F401
+
+from shared.themes import ThemeManager
 
 from PySide6.QtWidgets import QApplication
 
 from matcher.gui.main_window import MainWindow
 
 logger = logging.getLogger(__name__)
-
-_STYLES_PATH = Path(__file__).parent / "gui" / "styles" / "theme.qss"
 
 
 def _setup_logging() -> None:
@@ -35,13 +34,14 @@ def main() -> None:
 
     app = QApplication(sys.argv)
 
-    # Load QSS theme
-    if _STYLES_PATH.exists():
-        stylesheet = _STYLES_PATH.read_text(encoding="utf-8")
-        app.setStyleSheet(stylesheet)
-        logger.info("Loaded theme from %s", _STYLES_PATH)
-    else:
-        logger.warning("Theme file not found: %s", _STYLES_PATH)
+    # Load theme via ThemeManager
+    from matcher.config import load_settings
+
+    settings = load_settings()
+    theme_mgr = ThemeManager("matcher")
+    theme_name = getattr(settings, "theme", "Светлая")
+    app.setStyleSheet(theme_mgr.get_stylesheet(theme_name))
+    logger.info("Loaded theme: %s", theme_name)
 
     window = MainWindow()
     window.show()

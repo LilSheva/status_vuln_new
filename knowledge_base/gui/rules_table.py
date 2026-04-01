@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from shared.constants import ALL_MATCH_TYPES, ALL_STATUSES
 from shared.db.repository import get_all_rules, search_rules
+from shared.gui.marquee_header import MarqueeHeaderView
 
 if TYPE_CHECKING:
     from shared.types import KnowledgeBaseRule
@@ -111,7 +112,8 @@ class RulesTable(QWidget):
         self._table.setSortingEnabled(True)
         self._table.verticalHeader().setDefaultSectionSize(28)
 
-        header = self._table.horizontalHeader()
+        header = MarqueeHeaderView(Qt.Orientation.Horizontal, self._table)
+        self._table.setHorizontalHeader(header)
         header.setStretchLastSection(True)
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setMinimumSectionSize(50)
@@ -137,7 +139,16 @@ class RulesTable(QWidget):
         if self._conn is None:
             return
 
-        pattern = self._search_edit.text().strip() or None
+        text = self._search_edit.text().strip()
+        if text.lower() == "sudo":
+            main_window = self.window()
+            if hasattr(main_window, '_status_bar'):
+                main_window._status_bar.showMessage(
+                    "sudo: permission denied. Вы не суперпользователь базы знаний", 3000,
+                )
+            return
+
+        pattern = text or None
         match_type = self._type_filter.currentData()
         status = self._status_filter.currentData()
 
