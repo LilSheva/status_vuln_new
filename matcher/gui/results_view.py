@@ -137,8 +137,10 @@ class ResultsView(QWidget):
         for row, result in enumerate(results):
             vuln = result.vulnerability
 
-            self._set_cell(row, 0, vuln.cve_id, row)
-            if getattr(vuln, "cvss", "") == "10.0":
+            cve_display = vuln.cve_id if vuln.cve_id and vuln.cve_id.upper() not in ("NAN", "N/A") else ""
+            self._set_cell(row, 0, cve_display, row)
+            cvss = getattr(vuln, "cvss", "")
+            if cvss == "10.0":
                 cve_item = self._table.item(row, 0)
                 if cve_item is not None:
                     cve_item.setToolTip("F")
@@ -176,8 +178,8 @@ class ResultsView(QWidget):
                 self._set_cell(row, 5, "", row)
                 self._set_cell(row, 6, "", row)
 
-        self._table.setSortingEnabled(True)
         self._table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
+        self._table.setSortingEnabled(True)
         self._table.blockSignals(False)
         self._table.resizeColumnsToContents()
         logger.info("Displayed %d results", len(results))

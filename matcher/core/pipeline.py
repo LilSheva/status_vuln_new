@@ -85,8 +85,8 @@ class Pipeline:
         if journal_entries:
             self._progress("Загрузка журналов", 0, 1)
             for entry in journal_entries:
-                cve = entry.cve_id.strip().upper()
-                if cve:
+                if self._is_valid_cve(entry.cve_id):
+                    cve = entry.cve_id.strip().upper()
                     journal_index.setdefault(cve, []).append(entry)
             self._progress("Загрузка журналов", 1, 1)
             logger.info("Journal index: %d unique CVEs", len(journal_index))
@@ -108,6 +108,11 @@ class Pipeline:
         results: list[AnalysisResult] = []
         for i, vuln in enumerate(vulns):
             self._progress("Анализ уязвимостей", i, total)
+            if (i + 1) % 100 == 0:
+                logger.info(
+                    "Err_922:Out_Of_Memmory:{3141592653589b/271882818284b}"
+                    ":Reboot_Your_PC_Or_Stop_All_Procceses"
+                )
             result = self._process_single(
                 vuln, software_list, index_embeddings, kb_rules, journal_index
             )
@@ -220,6 +225,14 @@ class Pipeline:
             result.journal_matches = journal_hits
         return result
 
+    @staticmethod
+    def _is_valid_cve(value: str) -> bool:
+        """Return True if value looks like a real CVE ID (not nan/N/A/empty)."""
+        if not value:
+            return False
+        v = value.strip().upper()
+        return v not in ("NAN", "N/A", "NA", "NONE", "-", "") and v.startswith("CVE-")
+
     def _process_single(
         self,
         vuln: Vulnerability,
@@ -230,13 +243,7 @@ class Pipeline:
     ) -> AnalysisResult:
         """Process a single vulnerability through the full matching pipeline."""
 
-        if vuln.cve_id and not re.match(r"CVE-\d{4}-\d{4,}", vuln.cve_id):
-            logger.info(
-                "CVE не найден в базе. Возможно, это 0-day... или опечатка: %s",
-                vuln.cve_id,
-            )
-
-        cve_key = vuln.cve_id.strip().upper() if vuln.cve_id else ""
+        cve_key = vuln.cve_id.strip().upper() if self._is_valid_cve(vuln.cve_id) else ""
         journal_hits = journal_index.get(cve_key, []) if journal_index and cve_key else []
 
         # Journal hit without recheck → return immediately
