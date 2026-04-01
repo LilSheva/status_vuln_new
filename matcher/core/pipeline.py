@@ -209,6 +209,17 @@ class Pipeline:
             logger.exception("Failed to load knowledge base")
             return []
 
+    def _apply_journal(
+        self, result: AnalysisResult, journal_hits: list[JournalEntry]
+    ) -> AnalysisResult:
+        """Override result with ПОВТОР if journal matches exist."""
+        if journal_hits:
+            result.status = STATUS_REPEAT
+            result.status_source = SOURCE_JOURNAL
+            result.ppts_id = None
+            result.journal_matches = journal_hits
+        return result
+
     def _process_single(
         self,
         vuln: Vulnerability,
@@ -225,14 +236,11 @@ class Pipeline:
                 vuln.cve_id,
             )
 
-        # Step 0: Check journal
         cve_key = vuln.cve_id.strip().upper() if vuln.cve_id else ""
         journal_hits = journal_index.get(cve_key, []) if journal_index and cve_key else []
-        if journal_index and cve_key and not journal_hits:
-            logger.debug("No journal match for CVE %r", cve_key)
 
+        # Journal hit without recheck → return immediately
         if journal_hits and not self._settings.journal_recheck:
-            # Trust journal, no vector analysis
             return AnalysisResult(
                 vulnerability=vuln,
                 status=STATUS_REPEAT,
@@ -243,6 +251,7 @@ class Pipeline:
                 journal_matches=journal_hits,
             )
 
+        # KB check
         if kb_rules:
             matched_rule, matched = self._status_assigner.check_knowledge_base(
                 vuln, kb_rules
@@ -250,12 +259,10 @@ class Pipeline:
             if matched and matched_rule is not None:
                 if self._kb_conn is not None and matched_rule.id is not None:
                     increment_match_count(self._kb_conn, matched_rule.id)
-                return self._status_assigner.assign_status(
-                    vuln, [], kb_rule=matched_rule
-                )
+                result = self._status_assigner.assign_status(vuln, [], kb_rule=matched_rule)
+                return self._apply_journal(result, journal_hits)
 
-        # Retrieve all top-N with threshold=0; real threshold checked below.
-        # All top-N kept in candidates so detail sheet can display them.
+        # Vector search (all top-N, threshold checked separately)
         all_vector_results = self._vectorizer.search(
             vuln.raw_text,
             index_embeddings,
@@ -264,11 +271,11 @@ class Pipeline:
             threshold=0.0,
         )
 
-        if not all_vector_results:
-            return self._status_assigner.assign_status(vuln, [])
-
-        if not any(s >= self._settings.vector_threshold for _, s in all_vector_results):
-            return self._status_assigner.assign_status(vuln, [])
+        if not all_vector_results or not any(
+            s >= self._settings.vector_threshold for _, s in all_vector_results
+        ):
+            result = self._status_assigner.assign_status(vuln, [])
+            return self._apply_journal(result, journal_hits)
 
         candidate_sw = [sw for sw, _ in all_vector_results]
         vector_scores = [score for _, score in all_vector_results]
@@ -294,10 +301,4 @@ class Pipeline:
         )
 
         result = self._status_assigner.assign_status(vuln, candidates)
-
-        # Attach journal matches and override status if CVE was seen before
-        if journal_hits:
-            result.status = STATUS_REPEAT
-            result.ppts_id = None
-            result.journal_matches = journal_hits
-        return result
+        return self._apply_journal(result, journal_hits)
