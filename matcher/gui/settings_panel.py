@@ -108,6 +108,12 @@ class SettingsPanel(QWidget):
         self._use_preprocessing.toggled.connect(self.settings_changed)
         layout.addRow("", self._use_preprocessing)
 
+        self._journal_recheck = QCheckBox("Перепроверка журналов")
+        self._journal_recheck.setChecked(False)
+        self._journal_recheck.setToolTip("Перепроверять записи из журналов проверок")
+        self._journal_recheck.toggled.connect(self.settings_changed)
+        layout.addRow("", self._journal_recheck)
+
         kb_widget = QWidget()
         kb_layout = QVBoxLayout(kb_widget)
         kb_layout.setContentsMargins(0, 0, 0, 0)
@@ -175,6 +181,7 @@ class SettingsPanel(QWidget):
             detail_primary_limit=self._detail_primary_limit.value(),
             detail_secondary_limit=self._detail_secondary_limit.value(),
             use_preprocessing=self._use_preprocessing.isChecked(),
+            journal_recheck=self._journal_recheck.isChecked(),
         )
 
     def set_settings(self, settings: PipelineSettings) -> None:
@@ -191,6 +198,8 @@ class SettingsPanel(QWidget):
         self._detail_primary_limit.setValue(settings.detail_primary_limit)
         self._detail_secondary_limit.setValue(settings.detail_secondary_limit)
         self._use_preprocessing.setChecked(settings.use_preprocessing)
+
+        self._journal_recheck.setChecked(settings.journal_recheck)
 
         self._use_kb.setChecked(settings.use_knowledge_base)
         self._kb_path_edit.setText(settings.kb_path)

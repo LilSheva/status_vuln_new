@@ -15,6 +15,7 @@ CONFIG_DIR = Path.home() / ".vuln-analyzer"
 CONFIG_FILE = CONFIG_DIR / "matcher_config.json"
 MAPPINGS_FILE = CONFIG_DIR / "ppts_mappings.json"
 RESPONSIBLE_FILE = CONFIG_DIR / "responsible_persons.json"
+PINNED_JOURNALS_FILE = CONFIG_DIR / "pinned_journals.json"
 
 
 def load_settings() -> PipelineSettings:
@@ -111,3 +112,25 @@ def save_ppts_mappings(mappings: dict[str, PptsColumnMapping]) -> None:
         logger.info("PPTS mappings saved to %s", MAPPINGS_FILE)
     except Exception:
         logger.exception("Failed to save PPTS mappings")
+
+
+def load_pinned_journals() -> list[str]:
+    """Load saved pinned journal file paths."""
+    if PINNED_JOURNALS_FILE.exists():
+        try:
+            return json.loads(PINNED_JOURNALS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            logger.exception("Failed to load pinned journals")
+    return []
+
+
+def save_pinned_journals(paths: list[str]) -> None:
+    """Persist pinned journal file paths."""
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        PINNED_JOURNALS_FILE.write_text(
+            json.dumps(paths, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        logger.exception("Failed to save pinned journals")

@@ -295,7 +295,7 @@ _JOURNAL_RESPONSIBLE_KEYS = ("ответственный",)
 _JOURNAL_PRODUCT_KEYS = ("продукт", "product")
 
 
-def read_journal(path: str | Path) -> list[JournalEntry]:
+def read_journal(path: str | Path, source_file: str = "") -> list[JournalEntry]:
     """Read a historical vulnerability journal file."""
     path = Path(path)
     if not path.exists():
@@ -348,6 +348,7 @@ def read_journal(path: str | Path) -> list[JournalEntry]:
                 ppts_id=ppts_id,
                 responsible=responsible,
                 product=product,
+                source_file=source_file,
             )
         )
 

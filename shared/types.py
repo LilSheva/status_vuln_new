@@ -37,6 +37,7 @@ class JournalEntry:
     ppts_id: str
     responsible: str
     product: str = ""
+    source_file: str = ""  # journal filename for traceability
 
 
 @dataclass
@@ -60,6 +61,7 @@ class AnalysisResult:
     candidates: list[MatchCandidate] = field(default_factory=list)
     ppts_id: str | None = None
     responsible: str | None = None
+    journal_matches: list[JournalEntry] = field(default_factory=list)
 
 
 @dataclass
@@ -119,3 +121,4 @@ class PipelineSettings:
     detail_secondary_limit: int = 3  # top N from secondary tier
     use_preprocessing: bool = True
     scripts_dir: str = "scripts"
+    journal_recheck: bool = False

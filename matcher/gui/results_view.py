@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from shared.constants import STATUS_CONDITIONAL, STATUS_EMPTY, STATUS_LINUX, STATUS_NO, STATUS_YES
+from shared.constants import STATUS_CONDITIONAL, STATUS_EMPTY, STATUS_LINUX, STATUS_NO, STATUS_REPEAT, STATUS_YES
 from shared.gui.marquee_header import MarqueeHeaderView
 
 if TYPE_CHECKING:
@@ -31,6 +31,7 @@ _STATUS_COLORS: dict[str, str] = {
     STATUS_NO: "#e74c3c",
     STATUS_LINUX: "#2980b9",
     STATUS_CONDITIONAL: "#f39c12",
+    STATUS_REPEAT: "#c0392b",
     STATUS_EMPTY: "#bdc3c7",
 }
 
@@ -52,7 +53,7 @@ _COL_PPTS_ID = 5
 
 _ROLE_RESULT_IDX = Qt.ItemDataRole.UserRole + 100
 
-_STATUS_OPTIONS: list[str] = [STATUS_EMPTY, STATUS_YES, STATUS_NO, STATUS_LINUX, STATUS_CONDITIONAL]
+_STATUS_OPTIONS: list[str] = [STATUS_EMPTY, STATUS_YES, STATUS_NO, STATUS_LINUX, STATUS_CONDITIONAL, STATUS_REPEAT]
 
 
 class _EditDelegate(QStyledItemDelegate):

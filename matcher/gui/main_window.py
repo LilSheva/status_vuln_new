@@ -24,9 +24,11 @@ from PySide6.QtWidgets import (
 )
 
 from matcher.config import (
+    load_pinned_journals,
     load_ppts_mappings,
     load_responsible_data,
     load_settings,
+    save_pinned_journals,
     save_ppts_mappings,
     save_responsible_data,
     save_settings,
@@ -95,6 +97,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._load_saved_settings()
         self._load_saved_mappings()
+        self._load_pinned_journals()
         self._load_responsible_data()
         self._connect_signals()
 
@@ -243,8 +246,12 @@ class MainWindow(QMainWindow):
         mappings = load_ppts_mappings()
         if "local" in mappings:
             self._file_loader.set_ppts_local_mapping(mappings["local"])
+            if mappings["local"].file_path:
+                self._file_loader.set_ppts_local_path(mappings["local"].file_path)
         if "general" in mappings:
             self._file_loader.set_ppts_general_mapping(mappings["general"])
+            if mappings["general"].file_path:
+                self._file_loader.set_ppts_general_path(mappings["general"].file_path)
 
     def _save_mappings(self) -> None:
         mappings = {}
@@ -254,6 +261,17 @@ class MainWindow(QMainWindow):
             mappings["general"] = self._file_loader.ppts_general_mapping
         if mappings:
             save_ppts_mappings(mappings)
+
+    def _load_pinned_journals(self) -> None:
+        """Restore pinned journal files from saved config."""
+        paths = load_pinned_journals()
+        if paths:
+            self._file_loader.set_pinned_journals(paths)
+
+    def _save_pinned_journals(self) -> None:
+        """Persist pinned journal files."""
+        paths = self._file_loader.get_pinned_journals()
+        save_pinned_journals(paths)
 
     def _on_files_changed(self) -> None:
         self._btn_run.setEnabled(self._file_loader.is_ready())
@@ -304,7 +322,8 @@ class MainWindow(QMainWindow):
             journal_entries = []
             for jpath in self._file_loader.journal_paths:
                 self._progress_view.log(f"Загрузка журнала: {Path(jpath).name}")
-                entries = read_journal(jpath)
+                fname = Path(jpath).stem
+                entries = read_journal(jpath, source_file=fname)
                 journal_entries.extend(entries)
                 self._progress_view.log(f"  -> {len(entries)} записей")
             if journal_entries:
@@ -430,5 +449,6 @@ class MainWindow(QMainWindow):
         save_settings(settings)
         self._save_mappings()
         self._save_responsible_data()
+        self._save_pinned_journals()
         self._cleanup_thread()
         super().closeEvent(event)

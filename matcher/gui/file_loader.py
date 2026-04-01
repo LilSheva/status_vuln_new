@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -159,8 +160,17 @@ class PptsSelector(QWidget):
         """Restore a saved mapping."""
         self._mapping = mapping
 
+    def set_path(self, path: str) -> None:
+        """Restore file path programmatically (e.g., from saved config)."""
+        if path and Path(path).exists():
+            self._set_path(path)
+
     def is_set(self) -> bool:
         return bool(self._path and Path(self._path).exists())
+
+
+_ROLE_PINNED = Qt.ItemDataRole.UserRole + 1
+_ROLE_PATH = Qt.ItemDataRole.UserRole + 2
 
 
 class JournalSelector(QWidget):
@@ -171,6 +181,7 @@ class JournalSelector(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._paths: list[str] = []
+        self._pinned: set[str] = set()
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -198,6 +209,7 @@ class JournalSelector(QWidget):
 
         self._list = QListWidget()
         self._list.setMaximumHeight(60)
+        self._list.itemDoubleClicked.connect(self._toggle_pin)
         layout.addWidget(self._list)
 
     def _add_files(self) -> None:
@@ -207,17 +219,61 @@ class JournalSelector(QWidget):
         for path in paths:
             if path not in self._paths:
                 self._paths.append(path)
-                self._list.addItem(Path(path).name)
+                item = QListWidgetItem(Path(path).name)
+                item.setData(_ROLE_PATH, path)
+                item.setData(_ROLE_PINNED, False)
+                self._list.addItem(item)
         if paths:
             self.files_changed.emit()
 
+    def _toggle_pin(self, item: QListWidgetItem) -> None:
+        """Toggle pinned state on double-click."""
+        path = item.data(_ROLE_PATH)
+        if not path:
+            return
+        is_pinned = item.data(_ROLE_PINNED)
+        if is_pinned:
+            self._pinned.discard(path)
+            item.setData(_ROLE_PINNED, False)
+            item.setText(Path(path).name)
+        else:
+            self._pinned.add(path)
+            item.setData(_ROLE_PINNED, True)
+            item.setText(f"\U0001f4cc {Path(path).name}")
+
     def _clear(self) -> None:
-        self._paths.clear()
-        self._list.clear()
+        """Remove only unpinned items; pinned items stay."""
+        rows_to_remove: list[int] = []
+        for i in range(self._list.count()):
+            item = self._list.item(i)
+            if item and not item.data(_ROLE_PINNED):
+                path = item.data(_ROLE_PATH)
+                if path in self._paths:
+                    self._paths.remove(path)
+                rows_to_remove.append(i)
+        for row in reversed(rows_to_remove):
+            self._list.takeItem(row)
         self.files_changed.emit()
 
     def get_paths(self) -> list[str]:
         return list(self._paths)
+
+    def get_pinned_paths(self) -> list[str]:
+        """Return list of pinned file paths."""
+        return [p for p in self._paths if p in self._pinned]
+
+    def set_pinned_paths(self, paths: list[str]) -> None:
+        """Restore pinned journals from saved config."""
+        for path in paths:
+            if path and Path(path).exists() and path not in self._paths:
+                self._paths.append(path)
+                self._pinned.add(path)
+                item = QListWidgetItem(f"\U0001f4cc {Path(path).name}")
+                item.setData(_ROLE_PATH, path)
+                item.setData(_ROLE_PINNED, True)
+                self._list.addItem(item)
+        if paths:
+            self.files_changed.emit()
 
 
 class FileLoaderPanel(QWidget):
@@ -279,6 +335,22 @@ class FileLoaderPanel(QWidget):
 
     def set_ppts_general_mapping(self, mapping: PptsColumnMapping | None) -> None:
         self._ppts_general.set_mapping(mapping)
+
+    def set_ppts_local_path(self, path: str) -> None:
+        """Restore the local PPTS file path from saved config."""
+        self._ppts_local.set_path(path)
+
+    def set_ppts_general_path(self, path: str) -> None:
+        """Restore the general PPTS file path from saved config."""
+        self._ppts_general.set_path(path)
+
+    def set_pinned_journals(self, paths: list[str]) -> None:
+        """Restore pinned journal paths from saved config."""
+        self._journal_selector.set_pinned_paths(paths)
+
+    def get_pinned_journals(self) -> list[str]:
+        """Return list of pinned journal file paths."""
+        return self._journal_selector.get_pinned_paths()
 
     def is_ready(self) -> bool:
         """Return True if TSU and at least one PPTS file are selected."""

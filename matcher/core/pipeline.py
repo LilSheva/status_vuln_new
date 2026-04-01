@@ -8,7 +8,7 @@ import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-from shared.constants import SOURCE_JOURNAL
+from shared.constants import SOURCE_JOURNAL, STATUS_REPEAT
 from shared.db.repository import bulk_get_active_rules, get_enabled_scripts, increment_match_count
 from shared.types import (
     AnalysisResult,
@@ -81,15 +81,13 @@ class Pipeline:
             len(journal_entries) if journal_entries else 0,
         )
 
-        journal_index: dict[str, JournalEntry] = {}
+        journal_index: dict[str, list[JournalEntry]] = {}
         if journal_entries:
             self._progress("Загрузка журналов", 0, 1)
             for entry in journal_entries:
                 cve = entry.cve_id.strip().upper()
                 if cve:
-                    # Keep the first occurrence (most recent journal loaded first)
-                    if cve not in journal_index:
-                        journal_index[cve] = entry
+                    journal_index.setdefault(cve, []).append(entry)
             self._progress("Загрузка журналов", 1, 1)
             logger.info("Journal index: %d unique CVEs", len(journal_index))
 
@@ -215,7 +213,7 @@ class Pipeline:
         software_list: list[Software],
         index_embeddings: NDArray[np.float32],
         kb_rules: list,
-        journal_index: dict[str, JournalEntry],
+        journal_index: dict[str, list[JournalEntry]],
     ) -> AnalysisResult:
         """Process a single vulnerability through the full matching pipeline."""
 
@@ -225,18 +223,21 @@ class Pipeline:
                 vuln.cve_id,
             )
 
-        if journal_index and vuln.cve_id:
-            cve_key = vuln.cve_id.strip().upper()
-            journal_hit = journal_index.get(cve_key)
-            if journal_hit is not None and journal_hit.status:
-                return AnalysisResult(
-                    vulnerability=vuln,
-                    status=journal_hit.status,
-                    status_source=SOURCE_JOURNAL,
-                    candidates=[],
-                    ppts_id=journal_hit.ppts_id or None,
-                    responsible=journal_hit.responsible or None,
-                )
+        # Step 0: Check journal
+        cve_key = vuln.cve_id.strip().upper() if vuln.cve_id else ""
+        journal_hits = journal_index.get(cve_key, []) if journal_index and cve_key else []
+
+        if journal_hits and not self._settings.journal_recheck:
+            # Trust journal, no vector analysis
+            return AnalysisResult(
+                vulnerability=vuln,
+                status=STATUS_REPEAT,
+                status_source=SOURCE_JOURNAL,
+                candidates=[],
+                ppts_id=None,
+                responsible=None,
+                journal_matches=journal_hits,
+            )
 
         if kb_rules:
             matched_rule, matched = self._status_assigner.check_knowledge_base(
@@ -288,4 +289,11 @@ class Pipeline:
             candidate_sw, vector_scores, fuzzy_scores, exact_scores
         )
 
-        return self._status_assigner.assign_status(vuln, candidates)
+        result = self._status_assigner.assign_status(vuln, candidates)
+
+        # Attach journal matches and override status if CVE was seen before
+        if journal_hits:
+            result.status = STATUS_REPEAT
+            result.ppts_id = None
+            result.journal_matches = journal_hits
+        return result

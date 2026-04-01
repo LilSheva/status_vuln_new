@@ -10,14 +10,20 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from shared.constants import STATUS_CONDITIONAL, STATUS_LINUX, STATUS_NO, STATUS_YES
+from shared.constants import (
+    STATUS_CONDITIONAL,
+    STATUS_LINUX,
+    STATUS_NO,
+    STATUS_REPEAT,
+    STATUS_YES,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from openpyxl.worksheet.worksheet import Worksheet
 
-    from shared.types import AnalysisResult, MatchCandidate, PipelineSettings
+    from shared.types import AnalysisResult, JournalEntry, MatchCandidate, PipelineSettings
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +42,7 @@ _STATUS_FONT_COLORS: dict[str, str] = {
     STATUS_NO: "27AE60",        # green
     STATUS_LINUX: "2980B9",     # blue
     STATUS_CONDITIONAL: "E67E22",  # orange
+    STATUS_REPEAT: "C0392B",    # red
 }
 
 _SCORE_FILLS = {
@@ -135,8 +142,6 @@ _MAIN_HEADERS = [
     "Источник",
 ]
 
-_NO_PPTS = "----------"
-
 
 def _report_date() -> str:
     """Return report date (yesterday if before 08:00, today otherwise)."""
@@ -164,9 +169,7 @@ def _write_main_sheet(
         v = r.vulnerability
         num = row_idx - 1
 
-        if r.status in (STATUS_NO, STATUS_CONDITIONAL, STATUS_LINUX):
-            ppts_value = _NO_PPTS
-        elif r.status == STATUS_YES:
+        if r.status == STATUS_YES:
             ppts_value = r.ppts_id or ""
         else:
             ppts_value = ""
@@ -210,19 +213,25 @@ _DETAIL_HEADERS = [
     "Итоговый балл",
     "Ранг",
     "Источник",
+    "Журнал (файл)",
+    "Журнал (продукт)",
+    "Журнал (ППТС ID)",
+    "Журнал (отв.)",
 ]
 
 
 _MERGE_COLS = (1, 2, 3)  # columns merged per group: №, CVE ID, Продукт (ТСУ)
 
 
-def _source_label(status_source: str) -> str:
-    """Map status_source to a human-readable label for the detail sheet."""
-    if status_source == "knowledge_base":
+def _source_label(source: str) -> str:
+    """Map candidate source to human-readable label."""
+    if source == "local_ppts":
+        return "ППТС лок."
+    if source == "general_ppts":
+        return "ППТС общ."
+    if source == "knowledge_base":
         return "БЗ"
-    if status_source == "journal":
-        return "Журнал"
-    return "Вектор"
+    return source  # For journal source_file names
 
 
 def _write_detail_sheet(
@@ -244,41 +253,67 @@ def _write_detail_sheet(
     row_idx = 2
 
     for result_num, r in enumerate(results, 1):
-        if not r.candidates:
-            continue
-
         tsu_display = _vendor_product(r.vulnerability.vendor, r.vulnerability.product)
-        filtered = _filter_candidates(r.candidates, primary_limit, secondary_limit)
-        if not filtered:
+
+        # Determine rows to write
+        rows_to_write: list[tuple[str, MatchCandidate | None, JournalEntry | None]] = []
+
+        # Add candidate rows
+        filtered = (
+            _filter_candidates(r.candidates, primary_limit, secondary_limit)
+            if r.candidates
+            else []
+        )
+        for c in filtered:
+            rows_to_write.append(("candidate", c, None))
+
+        # Add journal rows
+        for jm in r.journal_matches:
+            rows_to_write.append(("journal", None, jm))
+
+        if not rows_to_write:
             continue
 
         group_start = row_idx
-        source_label = _source_label(r.status_source)
 
-        for i, c in enumerate(filtered):
-            tier = _candidate_tier(c.combined_score)
-            ppts_display = _vendor_product(c.software.vendor, c.software.name)
-
+        for i, (row_type, candidate, journal_match) in enumerate(rows_to_write):
+            # Shared columns: only on first row
             ws.cell(row=row_idx, column=1, value=result_num if i == 0 else None)
             ws.cell(row=row_idx, column=2, value=r.vulnerability.cve_id if i == 0 else None)
             ws.cell(row=row_idx, column=3, value=tsu_display if i == 0 else None)
 
-            ws.cell(row=row_idx, column=4, value=ppts_display)
-            ws.cell(row=row_idx, column=5, value=c.software.id)
+            if row_type == "candidate":
+                c = candidate  # type: ignore[assignment]
+                ppts_display = _vendor_product(c.software.vendor, c.software.name)
+                tier = _candidate_tier(c.combined_score)
 
-            vs_cell = ws.cell(row=row_idx, column=6, value=round(c.vector_score, 4))
-            ws.cell(row=row_idx, column=7, value=round(c.fuzzy_score, 2))
-            ws.cell(row=row_idx, column=8, value=round(c.exact_score, 2))
-            cs_cell = ws.cell(row=row_idx, column=9, value=round(c.combined_score, 4))
+                ws.cell(row=row_idx, column=4, value=ppts_display)
+                ws.cell(row=row_idx, column=5, value=c.software.id)
 
-            for cell in (vs_cell, cs_cell):
-                fill = _score_fill(cell.value if cell.value else 0)
-                if fill:
-                    cell.fill = fill
+                vs_cell = ws.cell(row=row_idx, column=6, value=round(c.vector_score, 4))
+                ws.cell(row=row_idx, column=7, value=round(c.fuzzy_score, 2))
+                ws.cell(row=row_idx, column=8, value=round(c.exact_score, 2))
+                cs_cell = ws.cell(row=row_idx, column=9, value=round(c.combined_score, 4))
 
-            ws.cell(row=row_idx, column=10, value=tier)
-            ws.cell(row=row_idx, column=11, value=source_label)
+                for cell in (vs_cell, cs_cell):
+                    fill = _score_fill(cell.value if cell.value else 0)
+                    if fill:
+                        cell.fill = fill
 
+                ws.cell(row=row_idx, column=10, value=tier)
+                ws.cell(row=row_idx, column=11, value=_source_label(c.software.source))
+                # Journal columns empty for candidate rows
+
+            elif row_type == "journal":
+                jm = journal_match  # type: ignore[assignment]
+                # Candidate columns 4-11 empty for journal rows
+                ws.cell(row=row_idx, column=12, value=jm.source_file)
+                product_j = jm.product if jm.product else ""
+                ws.cell(row=row_idx, column=13, value=product_j)
+                ws.cell(row=row_idx, column=14, value=jm.ppts_id or "")
+                ws.cell(row=row_idx, column=15, value=jm.responsible or "")
+
+            # Apply borders
             for col in range(1, ncols + 1):
                 ws.cell(row=row_idx, column=col).border = _THIN_BORDER
 
