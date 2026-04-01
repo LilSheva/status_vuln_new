@@ -41,7 +41,6 @@ _COLUMNS = [
     "Статус",
     "Источник",
     "ППТС ID",
-    "Ответственный",
     "Лучший кандидат",
     "Балл",
 ]
@@ -163,21 +162,22 @@ class ResultsView(QWidget):
             self._set_cell(row, _COL_SOURCE, source_display, row)
 
             self._set_cell(row, _COL_PPTS_ID, result.ppts_id or "", row)
-            self._set_cell(row, 5, result.responsible or "", row)
 
             if result.candidates:
                 best = result.candidates[0]
-                self._set_cell(row, 6, best.software.name, row)
+                best_display = f"{best.software.vendor} - {best.software.name}" if best.software.vendor else best.software.name
+                self._set_cell(row, 5, best_display, row)
                 score_item = QTableWidgetItem(f"{best.combined_score:.3f}")
                 score_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 score_item.setData(Qt.ItemDataRole.UserRole, best.combined_score)
                 score_item.setData(_ROLE_RESULT_IDX, row)
-                self._table.setItem(row, 7, score_item)
+                self._table.setItem(row, 6, score_item)
             else:
+                self._set_cell(row, 5, "", row)
                 self._set_cell(row, 6, "", row)
-                self._set_cell(row, 7, "", row)
 
         self._table.setSortingEnabled(True)
+        self._table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
         self._table.blockSignals(False)
         self._table.resizeColumnsToContents()
         logger.info("Displayed %d results", len(results))

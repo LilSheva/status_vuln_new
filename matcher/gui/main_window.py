@@ -131,22 +131,28 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(header)
 
-        top_splitter = QSplitter()
-
         files_group = QGroupBox("Файлы")
         files_layout = QVBoxLayout(files_group)
+        files_layout.setContentsMargins(8, 8, 8, 8)
+        files_layout.setSpacing(4)
         self._file_loader = FileLoaderPanel()
         files_layout.addWidget(self._file_loader)
-        top_splitter.addWidget(files_group)
+        main_layout.addWidget(files_group)
 
-        settings_group = QGroupBox("Параметры")
-        settings_layout = QVBoxLayout(settings_group)
+        self._settings_toggle = QPushButton("▶ Параметры")
+        self._settings_toggle.setObjectName("btn_secondary")
+        self._settings_toggle.setCheckable(True)
+        self._settings_toggle.setChecked(False)
+        self._settings_toggle.clicked.connect(self._toggle_settings)
+        main_layout.addWidget(self._settings_toggle)
+
+        self._settings_container = QWidget()
+        sc_layout = QVBoxLayout(self._settings_container)
+        sc_layout.setContentsMargins(0, 0, 0, 0)
         self._settings_panel = SettingsPanel()
-        settings_layout.addWidget(self._settings_panel)
-        top_splitter.addWidget(settings_group)
-
-        top_splitter.setSizes([500, 400])
-        main_layout.addWidget(top_splitter)
+        sc_layout.addWidget(self._settings_panel)
+        self._settings_container.setVisible(False)
+        main_layout.addWidget(self._settings_container)
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
@@ -200,6 +206,10 @@ class MainWindow(QMainWindow):
         self._konami_detector = KonamiDetector(parent=self)
         self.installEventFilter(self._konami_detector)
         self._konami_detector.activated.connect(self._on_konami)
+
+    def _toggle_settings(self, checked: bool) -> None:
+        self._settings_container.setVisible(checked)
+        self._settings_toggle.setText("▼ Параметры" if checked else "▶ Параметры")
 
     def _connect_signals(self) -> None:
         self._file_loader.files_changed.connect(self._on_files_changed)
