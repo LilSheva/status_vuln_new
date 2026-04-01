@@ -18,7 +18,7 @@ RESPONSIBLE_FILE = CONFIG_DIR / "responsible_persons.json"
 
 
 def load_settings() -> PipelineSettings:
-    """Load pipeline settings from the config file, or return defaults."""
+    """Load pipeline settings from config file, or return defaults."""
     if CONFIG_FILE.exists():
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -41,10 +41,6 @@ def save_settings(settings: PipelineSettings) -> None:
         logger.exception("Failed to save config to %s", CONFIG_FILE)
 
 
-# ---------------------------------------------------------------------------
-# PPTS column mappings persistence
-# ---------------------------------------------------------------------------
-
 
 def _mapping_to_dict(m: PptsColumnMapping) -> dict:
     return {
@@ -65,7 +61,7 @@ def _dict_to_mapping(d: dict) -> PptsColumnMapping:
 
 
 def load_responsible_data() -> dict[str, object]:
-    """Load the saved list of responsible persons and last-used values."""
+    """Load saved responsible persons and last-used values."""
     if RESPONSIBLE_FILE.exists():
         try:
             return json.loads(RESPONSIBLE_FILE.read_text(encoding="utf-8"))
@@ -75,7 +71,7 @@ def load_responsible_data() -> dict[str, object]:
 
 
 def save_responsible_data(persons: list[str], last_responsible: str, last_publication: str) -> None:
-    """Persist the list of responsible persons and last-used values."""
+    """Persist responsible persons and last-used values."""
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         data = {
@@ -93,7 +89,7 @@ def save_responsible_data(persons: list[str], last_responsible: str, last_public
 
 
 def load_ppts_mappings() -> dict[str, PptsColumnMapping]:
-    """Load saved PPTS column mappings keyed by source ('local' / 'general')."""
+    """Load saved PPTS column mappings."""
     if MAPPINGS_FILE.exists():
         try:
             data = json.loads(MAPPINGS_FILE.read_text(encoding="utf-8"))

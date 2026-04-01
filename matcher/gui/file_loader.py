@@ -127,7 +127,6 @@ class PptsSelector(QWidget):
         self._path_edit.setText(Path(path).name if path else "")
         self._path_edit.setToolTip(path)
         self._btn_columns.setEnabled(bool(path))
-        # Reset mapping when file changes
         self._mapping = None
         self.file_selected.emit(path)
 

@@ -64,11 +64,7 @@ class AnalysisResult:
 
 @dataclass
 class KnowledgeBaseRule:
-    """A rule from the knowledge base.
-
-    Supports separate vendor and product patterns, each with its own match type.
-    Legacy 'pattern' field is kept for backward compatibility (maps to product_pattern).
-    """
+    """A rule from the knowledge base with vendor/product pattern matching."""
 
     id: int | None = None
     pattern: str = ""                           # legacy / product pattern

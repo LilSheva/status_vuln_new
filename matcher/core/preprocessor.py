@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Each plugin entry dict
 EntryDict = dict[str, str]
 
 
@@ -51,13 +50,7 @@ def _load_script(script_path: str | Path) -> ProcessFunc | None:
 
 
 def _evaluate_condition(condition: str, entry: EntryDict) -> bool:
-    """Evaluate a simple condition string against an entry.
-
-    Supported formats:
-        ""                              -> always True
-        "vendor contains microsoft"     -> entry["vendor"] contains "microsoft" (case-insensitive)
-        "product contains linux"        -> entry["product"] contains "linux"
-    """
+    """Evaluate a simple condition string (e.g. 'vendor contains microsoft') against an entry."""
     condition = condition.strip()
     if not condition:
         return True
@@ -104,15 +97,7 @@ class Preprocessor:
         entries: list[EntryDict],
         configs: list[ScriptConfig],
     ) -> list[EntryDict]:
-        """Run all enabled scripts on entries according to their conditions.
-
-        Args:
-            entries: List of entry dicts with keys: vendor, product, version, raw_text.
-            configs: Script configurations (already sorted by priority).
-
-        Returns:
-            Processed list of entries (may be larger if scripts split entries).
-        """
+        """Run all enabled scripts on entries according to their conditions."""
         result = list(entries)
 
         for config in configs:
@@ -123,7 +108,6 @@ class Preprocessor:
             if process_fn is None:
                 continue
 
-            # Split entries into matching and non-matching
             to_process: list[EntryDict] = []
             passthrough: list[EntryDict] = []
 

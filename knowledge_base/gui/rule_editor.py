@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -66,7 +65,6 @@ class RuleEditorDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        # --- Vendor pattern ---
         vendor_group = QGroupBox("Паттерн вендора (опционально)")
         vendor_form = QFormLayout(vendor_group)
         vendor_form.setSpacing(8)
@@ -76,7 +74,6 @@ class RuleEditorDialog(QDialog):
         vendor_form.addRow("Паттерн:", self._vendor_pattern)
 
         self._vendor_match_type = _make_match_type_combo()
-        # Default to 'contains' for vendor
         idx = self._vendor_match_type.findData("contains")
         if idx >= 0:
             self._vendor_match_type.setCurrentIndex(idx)
@@ -84,7 +81,6 @@ class RuleEditorDialog(QDialog):
 
         layout.addWidget(vendor_group)
 
-        # --- Product pattern ---
         product_group = QGroupBox("Паттерн продукта")
         product_form = QFormLayout(product_group)
         product_form.setSpacing(8)
@@ -98,22 +94,18 @@ class RuleEditorDialog(QDialog):
 
         layout.addWidget(product_group)
 
-        # --- Common fields ---
         common_form = QFormLayout()
         common_form.setSpacing(8)
 
-        # Status
         self._status = QComboBox()
         for st in ALL_STATUSES:
             self._status.addItem(st, st)
         common_form.addRow("Статус:", self._status)
 
-        # PPTS ID
         self._ppts_id = QLineEdit()
         self._ppts_id.setPlaceholderText("Опционально...")
         common_form.addRow("ППТС ID:", self._ppts_id)
 
-        # Vector threshold
         self._threshold_widget = QWidget()
         thr_layout = QHBoxLayout(self._threshold_widget)
         thr_layout.setContentsMargins(0, 0, 0, 0)
@@ -128,11 +120,9 @@ class RuleEditorDialog(QDialog):
         self._threshold_widget.setVisible(False)
         common_form.addRow("Порог вектора:", self._threshold_widget)
 
-        # Show/hide threshold when match type changes
         self._product_match_type.currentIndexChanged.connect(self._on_match_type_changed)
         self._vendor_match_type.currentIndexChanged.connect(self._on_match_type_changed)
 
-        # Comment
         self._comment = QTextEdit()
         self._comment.setPlaceholderText("Комментарий аналитика...")
         self._comment.setMaximumHeight(70)
@@ -140,7 +130,6 @@ class RuleEditorDialog(QDialog):
 
         layout.addLayout(common_form)
 
-        # --- Buttons ---
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -202,7 +191,6 @@ class RuleEditorDialog(QDialog):
         product_mt = self._product_match_type.currentData()
         vendor_mt = self._vendor_match_type.currentData()
 
-        # Validate regex patterns
         for label, pat, mt in [
             ("продукта", product_pattern, product_mt),
             ("вендора", vendor_pattern, vendor_mt),

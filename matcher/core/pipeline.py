@@ -13,7 +13,6 @@ from shared.db.repository import bulk_get_active_rules, get_enabled_scripts, inc
 from shared.types import (
     AnalysisResult,
     JournalEntry,
-    MatchCandidate,
     PipelineSettings,
     ScriptConfig,
     Software,
@@ -29,7 +28,6 @@ from .status_assigner import StatusAssigner
 from .vectorizer import Vectorizer
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
 
     import numpy as np
     from numpy.typing import NDArray
@@ -48,17 +46,7 @@ def _noop_progress(stage: str, current: int, total: int) -> None:
 
 
 class Pipeline:
-    """Orchestrate the full vulnerability matching pipeline.
-
-    Stages:
-        0. Journal check (if journal files provided — match by CVE)
-        1. Preprocessing (plugin scripts)
-        2. Knowledge base check (if enabled)
-        3. Vector search (embeddings + cosine similarity)
-        4. Normalization + Fuzzy matching
-        5. Exact matching
-        6. Combined scoring + Status assignment
-    """
+    """Orchestrate the full vulnerability matching pipeline."""
 
     def __init__(self, settings: PipelineSettings | None = None) -> None:
         self._settings = settings or PipelineSettings()
@@ -84,16 +72,7 @@ class Pipeline:
         software_list: list[Software],
         journal_entries: list[JournalEntry] | None = None,
     ) -> list[AnalysisResult]:
-        """Run the full analysis pipeline.
-
-        Args:
-            vulnerabilities: Loaded vulnerability entries from TSU.
-            software_list: Loaded software entries from PPTS.
-            journal_entries: Historical journal entries for CVE lookup.
-
-        Returns:
-            List of AnalysisResult for each vulnerability.
-        """
+        """Run the full analysis pipeline on vulnerabilities against software list."""
         total = len(vulnerabilities)
         logger.info(
             "Pipeline started: %d vulnerabilities, %d software entries, %d journal entries",
@@ -102,7 +81,6 @@ class Pipeline:
             len(journal_entries) if journal_entries else 0,
         )
 
-        # --- Stage 0: Build journal index ---
         journal_index: dict[str, JournalEntry] = {}
         if journal_entries:
             self._progress("Загрузка журналов", 0, 1)
@@ -115,22 +93,18 @@ class Pipeline:
             self._progress("Загрузка журналов", 1, 1)
             logger.info("Journal index: %d unique CVEs", len(journal_index))
 
-        # --- Stage 1: Preprocessing ---
         self._progress("Препроцессинг", 0, total)
         vulns = self._run_preprocessing(vulnerabilities)
 
-        # --- Stage 2: Knowledge base ---
         kb_rules = []
         if self._settings.use_knowledge_base and self._settings.kb_path:
             self._progress("Проверка по базе знаний", 0, total)
             kb_rules = self._load_kb_rules()
 
-        # --- Stage 3: Build vector index ---
         self._progress("Построение векторного индекса", 0, 1)
         index_embeddings, _ = self._vectorizer.build_index(software_list)
         self._progress("Построение векторного индекса", 1, 1)
 
-        # --- Stage 4-6: Process each vulnerability ---
         results: list[AnalysisResult] = []
         for i, vuln in enumerate(vulns):
             self._progress("Анализ уязвимостей", i, total)
@@ -141,7 +115,6 @@ class Pipeline:
 
         self._progress("Анализ уязвимостей", total, total)
 
-        # Close KB connection if opened
         if self._kb_conn is not None:
             self._kb_conn.close()
             self._kb_conn = None
@@ -159,17 +132,12 @@ class Pipeline:
     def _run_preprocessing(
         self, vulnerabilities: list[Vulnerability]
     ) -> list[Vulnerability]:
-        """Run preprocessing scripts on vulnerabilities.
-
-        If KB is enabled, load script configs from SQLite.
-        Otherwise, auto-discover .py scripts from scripts_dir.
-        """
+        """Run preprocessing scripts (from KB config or auto-discovered)."""
         if not self._settings.use_preprocessing:
             return vulnerabilities
 
         configs: list[ScriptConfig] = []
 
-        # Try loading from KB first
         if self._settings.use_knowledge_base and self._settings.kb_path:
             try:
                 from shared.db.models import get_connection
@@ -180,7 +148,6 @@ class Pipeline:
             except Exception:
                 logger.exception("Failed to load script configs from KB")
 
-        # Auto-discover scripts if no KB configs available
         if not configs:
             scripts_dir = Path(self._settings.scripts_dir)
             if scripts_dir.is_dir():
@@ -252,14 +219,12 @@ class Pipeline:
     ) -> AnalysisResult:
         """Process a single vulnerability through the full matching pipeline."""
 
-        # CVE format sanity check
         if vuln.cve_id and not re.match(r"CVE-\d{4}-\d{4,}", vuln.cve_id):
             logger.info(
                 "CVE не найден в базе. Возможно, это 0-day... или опечатка: %s",
                 vuln.cve_id,
             )
 
-        # Step 0: Check journal by CVE
         if journal_index and vuln.cve_id:
             cve_key = vuln.cve_id.strip().upper()
             journal_hit = journal_index.get(cve_key)
@@ -273,7 +238,6 @@ class Pipeline:
                     responsible=journal_hit.responsible or None,
                 )
 
-        # Step 1: Check knowledge base
         if kb_rules:
             matched_rule, matched = self._status_assigner.check_knowledge_base(
                 vuln, kb_rules
@@ -285,9 +249,8 @@ class Pipeline:
                     vuln, [], kb_rule=matched_rule
                 )
 
-        # Step 2: Vector search — retrieve all top-N regardless of threshold.
-        # Threshold is checked separately: if no candidate meets it, result is НЕТ.
-        # All top-N are kept in candidates so the detail sheet can show them all.
+        # Retrieve all top-N with threshold=0; real threshold checked below.
+        # All top-N kept in candidates so detail sheet can display them.
         all_vector_results = self._vectorizer.search(
             vuln.raw_text,
             index_embeddings,
@@ -299,11 +262,9 @@ class Pipeline:
         if not all_vector_results:
             return self._status_assigner.assign_status(vuln, [])
 
-        # If no candidate meets the configured threshold → НЕТ (no candidates stored)
         if not any(s >= self._settings.vector_threshold for _, s in all_vector_results):
             return self._status_assigner.assign_status(vuln, [])
 
-        # Step 3: Normalize + Fuzzy + Exact on ALL top-N candidates
         candidate_sw = [sw for sw, _ in all_vector_results]
         vector_scores = [score for _, score in all_vector_results]
 
@@ -323,10 +284,8 @@ class Pipeline:
             normalized_query, normalized_names
         )
 
-        # Step 4: Combined scoring
         candidates = self._scorer.build_candidates(
             candidate_sw, vector_scores, fuzzy_scores, exact_scores
         )
 
-        # Step 5: Status assignment
         return self._status_assigner.assign_status(vuln, candidates)

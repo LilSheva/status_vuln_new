@@ -17,15 +17,7 @@ _SKIP_PATTERNS = re.compile(
 
 
 def normalize_text(text: str, direction: str = "to_en") -> str:
-    """Normalize text by transliterating to a single script.
-
-    Args:
-        text: Input text (may contain mixed Cyrillic/Latin).
-        direction: "to_en" (Cyrillic -> Latin) or "to_ru" (Latin -> Cyrillic).
-
-    Returns:
-        Normalized text in the target script.
-    """
+    """Normalize text by transliterating to a single script (to_en or to_ru)."""
     if not text or not text.strip():
         return text
 

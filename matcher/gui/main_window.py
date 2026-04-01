@@ -109,7 +109,6 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(16, 12, 16, 12)
 
-        # --- Header ---
         header = QWidget()
         header_layout = QVBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)
@@ -119,7 +118,6 @@ class MainWindow(QMainWindow):
         title.setObjectName("title_label")
         header_layout.addWidget(title)
 
-        # Easter egg: 7 fast clicks on title -> about dialog
         self._title_click_detector = TitleClickDetector(parent=self)
         title.installEventFilter(self._title_click_detector)
         self._title_click_detector.activated.connect(self._show_about)
@@ -130,17 +128,14 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(header)
 
-        # --- Top area: files + settings ---
         top_splitter = QSplitter()
 
-        # Left: file loading
         files_group = QGroupBox("Файлы")
         files_layout = QVBoxLayout(files_group)
         self._file_loader = FileLoaderPanel()
         files_layout.addWidget(self._file_loader)
         top_splitter.addWidget(files_group)
 
-        # Right: settings
         settings_group = QGroupBox("Параметры")
         settings_layout = QVBoxLayout(settings_group)
         self._settings_panel = SettingsPanel()
@@ -150,7 +145,6 @@ class MainWindow(QMainWindow):
         top_splitter.setSizes([500, 400])
         main_layout.addWidget(top_splitter)
 
-        # --- Action buttons ---
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
@@ -184,7 +178,6 @@ class MainWindow(QMainWindow):
         btn_row.addStretch()
         main_layout.addLayout(btn_row)
 
-        # --- Bottom area: progress + results ---
         bottom_splitter = QSplitter()
         bottom_splitter.setOrientation(Qt.Orientation.Vertical)
 
@@ -197,12 +190,10 @@ class MainWindow(QMainWindow):
         bottom_splitter.setSizes([200, 400])
         main_layout.addWidget(bottom_splitter, 1)
 
-        # --- Status bar ---
         self._status_bar = QStatusBar()
         self.setStatusBar(self._status_bar)
         self._status_bar.showMessage("Готов")
 
-        # Easter egg: Konami code -> flash status bar
         self._konami_detector = KonamiDetector(parent=self)
         self.installEventFilter(self._konami_detector)
         self._konami_detector.activated.connect(self._on_konami)
@@ -213,7 +204,7 @@ class MainWindow(QMainWindow):
         self._btn_export.clicked.connect(self._on_export)
 
     def _load_responsible_data(self) -> None:
-        """Populate the responsible and publication combos from saved config."""
+        """Populate responsible and publication combos from saved config."""
         data = load_responsible_data()
         persons: list[str] = data.get("persons", [])  # type: ignore[assignment]
         last_resp: str = data.get("last_responsible", "")  # type: ignore[assignment]
@@ -232,7 +223,7 @@ class MainWindow(QMainWindow):
             self._publication_combo.setCurrentIndex(idx)
 
     def _save_responsible_data(self) -> None:
-        """Persist current responsible/publication selection; add new names to the list."""
+        """Persist responsible/publication selection and add new names to list."""
         responsible = self._responsible_combo.currentText().strip()
         publication = self._publication_combo.currentText()
         persons = [
@@ -276,7 +267,6 @@ class MainWindow(QMainWindow):
         settings = self._settings_panel.get_settings()
         save_settings(settings)
 
-        # Load files
         self._progress_view.reset()
         self._results_view.clear()
         self._btn_run.setEnabled(False)
@@ -288,7 +278,6 @@ class MainWindow(QMainWindow):
             vulnerabilities = read_tsu(self._file_loader.tsu_path)
             self._progress_view.log(f"Загружено {len(vulnerabilities)} уязвимостей")
 
-            # Load PPTS files (local + general)
             software_list = []
             if self._file_loader.ppts_local_path:
                 self._progress_view.log(f"Загрузка ППТС (лок.): {Path(self._file_loader.ppts_local_path).name}")
@@ -312,7 +301,6 @@ class MainWindow(QMainWindow):
 
             self._progress_view.log(f"Всего ПО: {len(software_list)} записей")
 
-            # Load journal files
             journal_entries = []
             for jpath in self._file_loader.journal_paths:
                 self._progress_view.log(f"Загрузка журнала: {Path(jpath).name}")
@@ -330,7 +318,6 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка чтения", str(exc))
             return
 
-        # Run pipeline in background thread
         self._thread = QThread()
         self._worker = _PipelineWorker(
             settings, vulnerabilities, software_list,
@@ -414,7 +401,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить отчёт:\n{exc}")
 
     def _show_about(self) -> None:
-        """Show the about dialog (easter egg)."""
+        """Show the about dialog."""
         QMessageBox.about(
             self,
             "О программе",
@@ -425,7 +412,7 @@ class MainWindow(QMainWindow):
         )
 
     def _on_konami(self) -> None:
-        """Flash the status bar as a Konami code reward."""
+        """Flash the status bar on Konami code activation."""
         original = self._status_bar.styleSheet()
         self._status_bar.setStyleSheet("background-color: #27ae60; color: white;")
         self._status_bar.showMessage("Konami code activated!")
@@ -438,7 +425,7 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event) -> None:
-        """Save settings, mappings, responsible data, and clean up on close."""
+        """Save settings and clean up on close."""
         settings = self._settings_panel.get_settings()
         save_settings(settings)
         self._save_mappings()

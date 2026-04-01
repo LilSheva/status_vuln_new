@@ -98,16 +98,11 @@ def _safe_get(row: list[str], idx: int | None) -> str:
 # Vendor+Product splitting (TSU format: combined in one column)
 # ---------------------------------------------------------------------------
 
-# Patterns for splitting "Vendor, Product" or "Vendor - Product"
 _VENDOR_PRODUCT_SEPARATORS = re.compile(r"\s*(?:,\s+|\s+-\s+)\s*")
 
 
 def _split_vendor_product(combined: str) -> tuple[str, str]:
-    """Split a combined 'Vendor, Product' or 'Vendor - Product' string.
-
-    Returns:
-        Tuple of (vendor, product). If no separator found, vendor is empty.
-    """
+    """Split a combined 'Vendor, Product' string; returns (vendor, product)."""
     if not combined:
         return "", ""
 
@@ -128,20 +123,7 @@ _TSU_SOURCE_KEYS = ("источник", "source", "ссылка", "url")
 
 
 def read_tsu(path: str | Path) -> list[Vulnerability]:
-    """Read a TSU file and return a list of Vulnerability objects.
-
-    The TSU format has vendor and product combined in a single column
-    separated by ', ' or ' - '. This function splits them automatically.
-
-    Args:
-        path: Path to the TSU file (.xlsx, .xls, or .csv).
-
-    Returns:
-        List of Vulnerability objects.
-
-    Raises:
-        ReaderError: If the file cannot be read or required columns are missing.
-    """
+    """Read a TSU file and return Vulnerability objects, auto-splitting vendor/product."""
     path = Path(path)
     if not path.exists():
         raise ReaderError(f"File not found: {path}")
@@ -208,14 +190,7 @@ _PPTS_VENDOR_KEYS = ("вендор", "vendor", "производитель", "р
 
 
 def read_ppts_headers(path: str | Path) -> list[str]:
-    """Read and return cleaned column headers from a PPTS file.
-
-    Args:
-        path: Path to the PPTS file.
-
-    Returns:
-        List of cleaned header strings, one per column.
-    """
+    """Read and return cleaned column headers from a PPTS file."""
     path = Path(path)
     if not path.exists():
         raise ReaderError(f"File not found: {path}")
@@ -226,11 +201,7 @@ def read_ppts_headers(path: str | Path) -> list[str]:
 
 
 def auto_detect_ppts_mapping(path: str | Path) -> PptsColumnMapping:
-    """Auto-detect column mapping for a PPTS file.
-
-    Returns:
-        PptsColumnMapping with detected indices and raw headers.
-    """
+    """Auto-detect column mapping for a PPTS file."""
     path = Path(path)
     rows = _read_rows(path)
     if not rows:
@@ -253,22 +224,7 @@ def read_ppts(
     source: str = "local_ppts",
     mapping: PptsColumnMapping | None = None,
 ) -> list[Software]:
-    """Read a PPTS file and return a list of Software objects.
-
-    If mapping is provided, uses explicit column indices.
-    Otherwise auto-detects columns by header keywords.
-
-    Args:
-        path: Path to the PPTS file (.xlsx, .xls, or .csv).
-        source: Label for the source ("local_ppts" or "general_ppts").
-        mapping: Optional explicit column mapping.
-
-    Returns:
-        List of Software objects.
-
-    Raises:
-        ReaderError: If the file cannot be read or required columns are missing.
-    """
+    """Read a PPTS file and return Software objects (uses mapping or auto-detects columns)."""
     path = Path(path)
     if not path.exists():
         raise ReaderError(f"File not found: {path}")
@@ -283,7 +239,6 @@ def read_ppts(
     if len(rows) < 2:
         raise ReaderError(f"File {path.name} has no data rows")
 
-    # Use explicit mapping or auto-detect
     if mapping is not None and mapping.col_name is not None:
         col_id = mapping.col_id
         col_name = mapping.col_name
@@ -310,7 +265,6 @@ def read_ppts(
             logger.debug("Skipping row %d: empty name and vendor", row_idx)
             continue
 
-        # If name is empty but vendor exists, use vendor as name
         display_name = name if name else vendor
 
         software_list.append(
@@ -334,7 +288,6 @@ _JOURNAL_COL_PPTS_ID = 5       # F
 _JOURNAL_COL_CVE = 6           # G
 _JOURNAL_COL_PRODUCT = 8       # I
 
-# Also try to find by header names in case columns shift
 _JOURNAL_CVE_KEYS = ("cve",)
 _JOURNAL_STATUS_KEYS = ("статус",)
 _JOURNAL_PPTS_ID_KEYS = ("id пптс", "пптс")
@@ -343,17 +296,7 @@ _JOURNAL_PRODUCT_KEYS = ("продукт", "product")
 
 
 def read_journal(path: str | Path) -> list[JournalEntry]:
-    """Read a historical vulnerability journal file.
-
-    Args:
-        path: Path to the journal file (.xlsx).
-
-    Returns:
-        List of JournalEntry objects.
-
-    Raises:
-        ReaderError: If the file cannot be read.
-    """
+    """Read a historical vulnerability journal file."""
     path = Path(path)
     if not path.exists():
         raise ReaderError(f"File not found: {path}")
@@ -368,7 +311,6 @@ def read_journal(path: str | Path) -> list[JournalEntry]:
     if len(rows) < 2:
         raise ReaderError(f"File {path.name} has no data rows")
 
-    # Try header-based detection first, fall back to fixed positions
     headers = [str(h) for h in rows[0]]
     col_cve = _find_column(headers, _JOURNAL_CVE_KEYS)
     col_status = _find_column(headers, _JOURNAL_STATUS_KEYS)

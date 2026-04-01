@@ -61,7 +61,6 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(16, 12, 16, 12)
 
-        # --- Header ---
         header = QWidget()
         header_layout = QVBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)
@@ -77,7 +76,6 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(header)
 
-        # --- DB selector ---
         db_row = QHBoxLayout()
         db_row.setSpacing(8)
         db_row.addWidget(QLabel("База данных:"))
@@ -100,7 +98,6 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(db_row)
 
-        # --- Action buttons ---
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
@@ -137,14 +134,12 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(btn_row)
 
-        # --- Rules table ---
         rules_group = QGroupBox("Правила")
         rules_layout = QVBoxLayout(rules_group)
         self._rules_table = RulesTable()
         rules_layout.addWidget(self._rules_table)
         main_layout.addWidget(rules_group, 1)
 
-        # --- Status bar ---
         self._status_bar = QStatusBar()
         self.setStatusBar(self._status_bar)
         self._status_bar.showMessage("Выберите или создайте базу данных")
@@ -302,12 +297,8 @@ class MainWindow(QMainWindow):
             self._btn_delete.setEnabled(False)
             self._status_bar.showMessage(f"Правило #{rule_id} удалено")
 
-    # ------------------------------------------------------------------
-    # Easter eggs
-    # ------------------------------------------------------------------
-
     def _setup_easter_eggs(self) -> None:
-        """Install hidden interaction detectors."""
+        """Install hidden interaction detectors (title clicks, Konami code)."""
         title_label = self.findChild(QLabel, "title_label")
         if title_label is not None:
             title_detector = TitleClickDetector(parent=self)
@@ -320,9 +311,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_konami(self) -> None:
-        """Brief visual effect when the Konami code is entered."""
+        """Flash the window title on Konami code activation."""
         self._status_bar.showMessage("Konami code activated! You are a power user.", 3000)
-        # Flash the window title briefly
         original = self.windowTitle()
         self.setWindowTitle("*** KONAMI ***")
         from PySide6.QtCore import QTimer
@@ -330,7 +320,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _show_about(self) -> None:
-        """Show hidden about dialog."""
+        """Show the about dialog."""
         QMessageBox.information(
             self,
             "О программе",
@@ -340,13 +330,9 @@ class MainWindow(QMainWindow):
             "Вы нашли секрет! :)",
         )
 
-    # ------------------------------------------------------------------
-    # Theme switching
-    # ------------------------------------------------------------------
-
     @Slot(str)
     def _on_theme_changed(self, theme_name: str) -> None:
-        """Apply the selected theme and persist the choice."""
+        """Apply the selected theme and persist choice."""
         app = QApplication.instance()
         if app is not None:
             app.setStyleSheet(self._theme_mgr.get_stylesheet(theme_name))

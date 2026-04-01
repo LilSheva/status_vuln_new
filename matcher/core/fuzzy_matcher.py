@@ -23,17 +23,7 @@ class FuzzyMatcher:
         self._min_word_length = min_word_length
 
     def score(self, text_a: str, text_b: str) -> float:
-        """Compute a combined fuzzy similarity score between two strings.
-
-        Uses the best of: token_sort_ratio, token_set_ratio, partial_ratio.
-
-        Args:
-            text_a: First string.
-            text_b: Second string.
-
-        Returns:
-            Score in range [0.0, 100.0].
-        """
+        """Compute best fuzzy similarity score using multiple RapidFuzz strategies."""
         if not text_a or not text_b:
             return 0.0
 
@@ -58,15 +48,7 @@ class FuzzyMatcher:
         query: str,
         candidate_names: list[str],
     ) -> list[float]:
-        """Score a query against a list of candidate names.
-
-        Args:
-            query: The query text.
-            candidate_names: List of candidate strings.
-
-        Returns:
-            List of scores (same order as candidate_names), range [0.0, 100.0].
-        """
+        """Score a query against a list of candidate names."""
         return [self.score(query, name) for name in candidate_names]
 
     def _prepare(self, text: str) -> str:

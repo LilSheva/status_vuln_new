@@ -45,13 +45,7 @@ class ProgressView(QWidget):
         layout.addWidget(self._log, 1)
 
     def update_progress(self, stage: str, current: int, total: int) -> None:
-        """Update the progress display.
-
-        Args:
-            stage: Name of the current stage.
-            current: Current step number.
-            total: Total number of steps.
-        """
+        """Update the progress display."""
         self._stage_label.setText(stage)
         if total > 0:
             pct = int(current / total * 100)

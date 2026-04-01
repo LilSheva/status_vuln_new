@@ -11,7 +11,6 @@ from shared.db.models import init_db
 from shared.db.repository import (
     create_rule,
     delete_rule,
-    get_all_rules,
     get_rule_by_id,
     search_rules,
     update_rule,

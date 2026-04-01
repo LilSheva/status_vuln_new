@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from shared.types import KnowledgeBaseRule, ScriptConfig
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -158,10 +158,7 @@ def increment_match_count(conn: sqlite3.Connection, rule_id: int) -> None:
 def bulk_get_active_rules(
     conn: sqlite3.Connection,
 ) -> list[KnowledgeBaseRule]:
-    """Return all rules for pipeline matching, ordered by match_type priority.
-
-    Order: exact -> contains -> regex -> vector (most specific first).
-    """
+    """Return all rules ordered by match_type priority (exact first, vector last)."""
     cursor = conn.execute(
         """
         SELECT * FROM rules

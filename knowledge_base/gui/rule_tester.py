@@ -48,7 +48,6 @@ class RuleTesterDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        # Rule info
         info_parts = []
         if self._rule.vendor_pattern:
             info_parts.append(
@@ -69,7 +68,6 @@ class RuleTesterDialog(QDialog):
         info.setWordWrap(True)
         layout.addWidget(info)
 
-        # Input area — two columns
         layout.addWidget(QLabel(
             "Введите тестовые данные (по строке: Вендор, Продукт):"
         ))
@@ -82,7 +80,6 @@ class RuleTesterDialog(QDialog):
         self._input.setMaximumHeight(120)
         layout.addWidget(self._input)
 
-        # Run button
         btn_row = QHBoxLayout()
         btn_test = QPushButton("Проверить")
         btn_test.clicked.connect(self._run_test)
@@ -90,7 +87,6 @@ class RuleTesterDialog(QDialog):
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
-        # Results table
         layout.addWidget(QLabel("Результаты:"))
         self._results_table = QTableWidget()
         self._results_table.setColumnCount(4)
@@ -119,7 +115,6 @@ class RuleTesterDialog(QDialog):
         self._results_table.setRowCount(len(lines))
 
         for row, line in enumerate(lines):
-            # Split "Vendor, Product" or treat whole line as product
             if ", " in line:
                 vendor, product = line.split(", ", 1)
             elif " - " in line:
@@ -148,7 +143,6 @@ class RuleTesterDialog(QDialog):
             p_item.setForeground(Qt.GlobalColor.darkGreen if product_ok else Qt.GlobalColor.darkRed)
             self._results_table.setItem(row, 3, p_item)
 
-            # Color entire row if both match
             if both_ok:
                 for col in range(4):
                     item = self._results_table.item(row, col)

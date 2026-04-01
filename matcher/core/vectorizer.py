@@ -30,11 +30,7 @@ class Vectorizer:
         self._model: SentenceTransformer | None = None
 
     def _ensure_model(self) -> SentenceTransformer:
-        """Lazy-load the embedding model.
-
-        Looks for a bundled copy in ``models/<name>`` first,
-        falls back to downloading from HuggingFace Hub.
-        """
+        """Lazy-load the embedding model, preferring bundled copy over download."""
         if self._model is None:
             from sentence_transformers import SentenceTransformer
 
@@ -49,14 +45,7 @@ class Vectorizer:
         return self._model
 
     def encode(self, texts: list[str]) -> NDArray[np.float32]:
-        """Encode a list of texts into embedding vectors.
-
-        Args:
-            texts: List of strings to encode.
-
-        Returns:
-            2D numpy array of shape (len(texts), embedding_dim).
-        """
+        """Encode texts into embedding vectors."""
         model = self._ensure_model()
         embeddings = model.encode(
             texts,
@@ -67,14 +56,7 @@ class Vectorizer:
         return embeddings  # type: ignore[return-value]
 
     def build_index(self, software_list: list[Software]) -> tuple[NDArray[np.float32], list[str]]:
-        """Build an embedding index from a list of Software entries.
-
-        Args:
-            software_list: List of Software objects.
-
-        Returns:
-            Tuple of (embeddings array, list of software names used for encoding).
-        """
+        """Build an embedding index from Software entries."""
         names = [
             f"{sw.vendor} {sw.name}".strip() if sw.vendor else sw.name
             for sw in software_list
@@ -92,29 +74,16 @@ class Vectorizer:
         top_n: int = DEFAULT_TOP_N,
         threshold: float = DEFAULT_VECTOR_THRESHOLD,
     ) -> list[tuple[Software, float]]:
-        """Find top-N most similar software entries for a query.
-
-        Args:
-            query: Query text (vulnerability raw_text).
-            index_embeddings: Pre-computed embeddings for software list.
-            software_list: List of Software objects (same order as index).
-            top_n: Number of top candidates to return.
-            threshold: Minimum cosine similarity to include.
-
-        Returns:
-            List of (Software, score) tuples, sorted by score descending.
-        """
+        """Find top-N most similar software entries for a query."""
         from sklearn.metrics.pairwise import cosine_similarity
 
         query_emb = self.encode([query])  # shape (1, dim)
         scores = cosine_similarity(query_emb, index_embeddings)[0]  # shape (n,)
 
-        # Get top-N indices above threshold
         candidate_indices = np.where(scores >= threshold)[0]
         if len(candidate_indices) == 0:
             return []
 
-        # Sort by score descending, take top_n
         sorted_idx = candidate_indices[np.argsort(scores[candidate_indices])[::-1]][:top_n]
 
         results: list[tuple[Software, float]] = []
@@ -131,18 +100,7 @@ class Vectorizer:
         top_n: int = DEFAULT_TOP_N,
         threshold: float = DEFAULT_VECTOR_THRESHOLD,
     ) -> list[list[tuple[Software, float]]]:
-        """Batch search: find top-N candidates for multiple queries at once.
-
-        Args:
-            queries: List of query texts.
-            index_embeddings: Pre-computed embeddings for software list.
-            software_list: List of Software objects.
-            top_n: Number of top candidates per query.
-            threshold: Minimum cosine similarity.
-
-        Returns:
-            List of result lists, one per query.
-        """
+        """Batch search: find top-N candidates for multiple queries at once."""
         if not queries:
             return []
 

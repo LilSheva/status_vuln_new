@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# --- Style constants ---
 _HEADER_FONT = Font(name="Segoe UI", bold=True, size=11, color="FFFFFF")
 _HEADER_FILL = PatternFill(start_color="4A5ABF", end_color="4A5ABF", fill_type="solid")
 _HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -32,7 +31,6 @@ _THIN_BORDER = Border(
     left=_THIN_SIDE, right=_THIN_SIDE, top=_THIN_SIDE, bottom=_THIN_SIDE,
 )
 
-# Text colors for status values (НЕТ=green, ДА=red, ЛИНУКС=blue, УСЛОВНО=orange)
 _STATUS_FONT_COLORS: dict[str, str] = {
     STATUS_YES: "C0392B",       # red
     STATUS_NO: "27AE60",        # green
@@ -101,17 +99,7 @@ def _filter_candidates(
     primary_limit: int = 0,
     secondary_limit: int = 3,
 ) -> list[MatchCandidate]:
-    """Filter candidates by tier priority.
-
-    - If tier-1 exists: tier-1 (limited by primary_limit, 0=all) + top secondary_limit tier-2
-    - Else if tier-2 exists: tier-2 (limited by primary_limit, 0=all) + top secondary_limit tier-3
-    - Else: all tier-3
-
-    Args:
-        candidates: All match candidates.
-        primary_limit: Max candidates from the primary tier (0 = show all).
-        secondary_limit: Max candidates from the secondary tier.
-    """
+    """Filter candidates by tier priority (best tier + secondary_limit from next tier)."""
     tier1 = [c for c in candidates if _candidate_tier(c.combined_score) == 1]
     tier2 = [c for c in candidates if _candidate_tier(c.combined_score) == 2]
     tier3 = [c for c in candidates if _candidate_tier(c.combined_score) == 3]
@@ -147,12 +135,11 @@ _MAIN_HEADERS = [
     "Источник",
 ]
 
-# Placeholder for ППТС ID when status is НЕТ / УСЛОВНО / ЛИНУКС
 _NO_PPTS = "----------"
 
 
 def _report_date() -> str:
-    """Return the report date string (yesterday if 00:00–08:00, today otherwise)."""
+    """Return report date (yesterday if before 08:00, today otherwise)."""
     now = datetime.now()
     date = (now - timedelta(days=1)).date() if now.hour < 8 else now.date()
     return date.strftime("%d.%m.%Y")
@@ -177,7 +164,6 @@ def _write_main_sheet(
         v = r.vulnerability
         num = row_idx - 1
 
-        # ППТС ID logic
         if r.status in (STATUS_NO, STATUS_CONDITIONAL, STATUS_LINUX):
             ppts_value = _NO_PPTS
         elif r.status == STATUS_YES:
@@ -190,7 +176,6 @@ def _write_main_sheet(
         ws.cell(row=row_idx, column=3, value=responsible)
         ws.cell(row=row_idx, column=4, value=publication)
 
-        # Status: empty status → empty cell (None); colored text, no fill
         status_cell = ws.cell(row=row_idx, column=5, value=r.status or None)
         if r.status in _STATUS_FONT_COLORS:
             status_cell.font = Font(color=_STATUS_FONT_COLORS[r.status], bold=True)
@@ -202,8 +187,7 @@ def _write_main_sheet(
         ws.cell(row=row_idx, column=9, value=_vendor_product(v.vendor, v.product))
         ws.cell(row=row_idx, column=10, value=v.source_url or "")
 
-    # Apply borders to the entire table: medium outer edge, thin inner lines.
-    last_data_row = 1 + len(results)  # 1 header + N data rows
+    last_data_row = 1 + len(results)
     _apply_table_borders(ws, last_data_row, len(_MAIN_HEADERS))
 
     _auto_width(ws, len(_MAIN_HEADERS))
@@ -246,13 +230,7 @@ def _write_detail_sheet(
     results: list[AnalysisResult],
     settings: PipelineSettings | None = None,
 ) -> None:
-    """Write the detailed analysis sheet (Sheet 2).
-
-    - Row numbers match the main table.
-    - Columns №, CVE ID, Продукт (ТСУ) are merged vertically across all candidates
-      of the same entry; a medium-weight separator line divides groups.
-    - Candidates are filtered by tier priority (≥0.7 / ≥0.4 / <0.4).
-    """
+    """Write the detailed analysis sheet (Sheet 2) with tier-filtered candidates."""
     ws.title = "Детальный анализ"
 
     for col, header in enumerate(_DETAIL_HEADERS, 1):
@@ -281,7 +259,6 @@ def _write_detail_sheet(
             tier = _candidate_tier(c.combined_score)
             ppts_display = _vendor_product(c.software.vendor, c.software.name)
 
-            # Shared columns: value only on first row of the group
             ws.cell(row=row_idx, column=1, value=result_num if i == 0 else None)
             ws.cell(row=row_idx, column=2, value=r.vulnerability.cve_id if i == 0 else None)
             ws.cell(row=row_idx, column=3, value=tsu_display if i == 0 else None)
@@ -302,7 +279,6 @@ def _write_detail_sheet(
             ws.cell(row=row_idx, column=10, value=tier)
             ws.cell(row=row_idx, column=11, value=source_label)
 
-            # Thin borders on all cells of this row
             for col in range(1, ncols + 1):
                 ws.cell(row=row_idx, column=col).border = _THIN_BORDER
 
@@ -310,7 +286,6 @@ def _write_detail_sheet(
 
         group_end = row_idx - 1
 
-        # Merge shared columns vertically for this group
         if group_end > group_start:
             for col in _MERGE_COLS:
                 ws.merge_cells(
@@ -321,7 +296,6 @@ def _write_detail_sheet(
                     horizontal="center", vertical="center", wrap_text=True,
                 )
 
-        # Separator: replace top border of the group's first row with a medium line
         for col in range(1, ncols + 1):
             cell = ws.cell(row=group_start, column=col)
             b = cell.border
@@ -393,15 +367,7 @@ def write_report(
     responsible: str = "",
     publication: str = "БДУ ФСТЕК",
 ) -> None:
-    """Generate a full XLSX report with 3 sheets.
-
-    Args:
-        path: Output file path.
-        results: Analysis results from the pipeline.
-        settings: Pipeline settings used for this run.
-        responsible: Analyst name for the report.
-        publication: Publication source label (БДУ ФСТЕК or RSS).
-    """
+    """Generate a full XLSX report with 3 sheets (main, detail, reference)."""
     wb = Workbook()
 
     ws_main = wb.active

@@ -67,7 +67,6 @@ class RulesTable(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        # --- Filter bar ---
         filter_row = QHBoxLayout()
         filter_row.setSpacing(8)
 
@@ -96,12 +95,10 @@ class RulesTable(QWidget):
 
         layout.addLayout(filter_row)
 
-        # --- Stats ---
         self._stats_label = QLabel("")
         self._stats_label.setObjectName("stats_label")
         layout.addWidget(self._stats_label)
 
-        # --- Table ---
         self._table = QTableWidget()
         self._table.setColumnCount(len(_COLUMNS))
         self._table.setHorizontalHeaderLabels(_COLUMNS)

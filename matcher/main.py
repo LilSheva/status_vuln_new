@@ -8,12 +8,10 @@ import sys
 # Import sentence_transformers before PySide6 to avoid shiboken MemoryError
 # when inspecting large transformers module source at runtime.
 import sentence_transformers  # noqa: F401
-
-from shared.themes import ThemeManager
-
 from PySide6.QtWidgets import QApplication
 
 from matcher.gui.main_window import MainWindow
+from shared.themes import ThemeManager
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,6 @@ def main() -> None:
 
     app = QApplication(sys.argv)
 
-    # Load theme via ThemeManager
     from matcher.config import load_settings
 
     settings = load_settings()

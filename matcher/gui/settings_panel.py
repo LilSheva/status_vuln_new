@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
@@ -14,7 +13,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QPushButton,
     QSpinBox,
@@ -47,14 +45,12 @@ class SettingsPanel(QWidget):
         layout = QFormLayout(self)
         layout.setSpacing(10)
 
-        # Theme selector
         self._theme_combo = QComboBox()
         self._theme_combo.addItems(THEME_NAMES)
         self._theme_combo.setToolTip("Тема оформления приложения")
         self._theme_combo.currentTextChanged.connect(self._on_theme_changed)
         layout.addRow("Тема:", self._theme_combo)
 
-        # Top-N candidates
         self._top_n = QSpinBox()
         self._top_n.setRange(1, 100)
         self._top_n.setValue(DEFAULT_TOP_N)
@@ -62,7 +58,6 @@ class SettingsPanel(QWidget):
         self._top_n.valueChanged.connect(self.settings_changed)
         layout.addRow("Top-N кандидатов:", self._top_n)
 
-        # Vector threshold
         self._vector_threshold = QDoubleSpinBox()
         self._vector_threshold.setRange(0.0, 1.0)
         self._vector_threshold.setSingleStep(0.05)
@@ -72,7 +67,6 @@ class SettingsPanel(QWidget):
         self._vector_threshold.valueChanged.connect(self.settings_changed)
         layout.addRow("Порог вектора:", self._vector_threshold)
 
-        # Fuzzy threshold
         self._fuzzy_threshold = QSpinBox()
         self._fuzzy_threshold.setRange(0, 100)
         self._fuzzy_threshold.setValue(DEFAULT_FUZZY_THRESHOLD)
@@ -80,7 +74,6 @@ class SettingsPanel(QWidget):
         self._fuzzy_threshold.valueChanged.connect(self.settings_changed)
         layout.addRow("Порог fuzzy:", self._fuzzy_threshold)
 
-        # Min word length
         self._min_word_length = QSpinBox()
         self._min_word_length.setRange(1, 20)
         self._min_word_length.setValue(DEFAULT_MIN_WORD_LENGTH)
@@ -88,7 +81,6 @@ class SettingsPanel(QWidget):
         self._min_word_length.valueChanged.connect(self.settings_changed)
         layout.addRow("Мин. длина слова:", self._min_word_length)
 
-        # Transliteration direction
         self._translit_dir = QComboBox()
         self._translit_dir.addItem("В латиницу (to_en)", "to_en")
         self._translit_dir.addItem("В кириллицу (to_ru)", "to_ru")
@@ -96,7 +88,6 @@ class SettingsPanel(QWidget):
         self._translit_dir.currentIndexChanged.connect(self.settings_changed)
         layout.addRow("Транслитерация:", self._translit_dir)
 
-        # Detail primary limit
         self._detail_primary_limit = QSpinBox()
         self._detail_primary_limit.setRange(0, 100)
         self._detail_primary_limit.setValue(0)
@@ -104,7 +95,6 @@ class SettingsPanel(QWidget):
         self._detail_primary_limit.valueChanged.connect(self.settings_changed)
         layout.addRow("Основной ярус (0=все):", self._detail_primary_limit)
 
-        # Detail secondary limit
         self._detail_secondary_limit = QSpinBox()
         self._detail_secondary_limit.setRange(0, 100)
         self._detail_secondary_limit.setValue(3)
@@ -112,14 +102,12 @@ class SettingsPanel(QWidget):
         self._detail_secondary_limit.valueChanged.connect(self.settings_changed)
         layout.addRow("Следующий ярус:", self._detail_secondary_limit)
 
-        # Preprocessing toggle
         self._use_preprocessing = QCheckBox("Препроцессинг")
         self._use_preprocessing.setChecked(True)
         self._use_preprocessing.setToolTip("Запускать плагины препроцессинга из папки scripts/")
         self._use_preprocessing.toggled.connect(self.settings_changed)
         layout.addRow("", self._use_preprocessing)
 
-        # Knowledge base toggle + path
         kb_widget = QWidget()
         kb_layout = QVBoxLayout(kb_widget)
         kb_layout.setContentsMargins(0, 0, 0, 0)
@@ -150,7 +138,7 @@ class SettingsPanel(QWidget):
         layout.addRow("База знаний:", kb_widget)
 
     def _on_theme_changed(self, name: str) -> None:
-        """Apply the selected theme immediately."""
+        """Apply the selected theme."""
         app = QApplication.instance()
         if app is not None:
             theme_mgr = ThemeManager("matcher")
@@ -209,7 +197,6 @@ class SettingsPanel(QWidget):
         self._kb_path_edit.setEnabled(settings.use_knowledge_base)
         self._kb_browse_btn.setEnabled(settings.use_knowledge_base)
 
-        # Theme — block signals to avoid triggering a stylesheet reload during init
         theme = getattr(settings, "theme", "Светлая")
         idx = self._theme_combo.findText(theme)
         if idx >= 0:

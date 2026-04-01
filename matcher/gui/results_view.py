@@ -50,22 +50,18 @@ _COL_STATUS = 3
 _COL_SOURCE = 4
 _COL_PPTS_ID = 5
 
-# Stores original result index in each item so sorting doesn't break edits.
 _ROLE_RESULT_IDX = Qt.ItemDataRole.UserRole + 100
 
 _STATUS_OPTIONS: list[str] = [STATUS_EMPTY, STATUS_YES, STATUS_NO, STATUS_LINUX, STATUS_CONDITIONAL]
 
 
 class _EditDelegate(QStyledItemDelegate):
-    """Provides a combo box for the Status column and a line edit for ППТС ID.
-    All other columns are read-only.
-    """
+    """Combo box for Status, line edit for ППТС ID, read-only otherwise."""
 
     def createEditor(self, parent, option, index):  # noqa: ANN001
         if index.column() == _COL_STATUS:
             combo = QComboBox(parent)
             combo.addItems(["(пусто)" if not s else s for s in _STATUS_OPTIONS])
-            # Open the dropdown automatically after the editor is placed.
             QTimer.singleShot(0, combo.showPopup)
             return combo
         if index.column() == _COL_PPTS_ID:
@@ -82,7 +78,6 @@ class _EditDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):  # noqa: ANN001
         if index.column() == _COL_STATUS:
-            # Only update UserRole here; _on_item_changed handles display + color.
             value = _STATUS_OPTIONS[editor.currentIndex()]
             model.setData(index, value, Qt.ItemDataRole.UserRole)
         else:
@@ -91,7 +86,6 @@ class _EditDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):  # noqa: ANN001
         super().paint(painter, option, index)
         if index.column() == _COL_STATUS:
-            # Draw a small dropdown arrow indicator on the right edge of the cell.
             painter.save()
             painter.setPen(QColor("#888888"))
             painter.drawText(
@@ -145,7 +139,6 @@ class ResultsView(QWidget):
             vuln = result.vulnerability
 
             self._set_cell(row, 0, vuln.cve_id, row)
-            # Easter egg: CVSS 10.0 gets a special tooltip
             if getattr(vuln, "cvss", "") == "10.0":
                 cve_item = self._table.item(row, 0)
                 if cve_item is not None:
@@ -153,7 +146,6 @@ class ResultsView(QWidget):
             self._set_cell(row, 1, vuln.vendor, row)
             self._set_cell(row, 2, vuln.product, row)
 
-            # Status with color
             status_item = QTableWidgetItem(result.status or "(пусто)")
             status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             color = _STATUS_COLORS.get(result.status, _STATUS_COLORS[STATUS_EMPTY])
@@ -191,7 +183,7 @@ class ResultsView(QWidget):
         logger.info("Displayed %d results", len(results))
 
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
-        """Sync AnalysisResult when user edits status or ППТС ID."""
+        """Sync AnalysisResult when user edits status or PPTS ID."""
         col = item.column()
         if col not in (_COL_STATUS, _COL_PPTS_ID):
             return
@@ -205,11 +197,9 @@ class ResultsView(QWidget):
                 value = item.data(Qt.ItemDataRole.UserRole) or ""
                 self._results[result_idx].status = value
                 self._results[result_idx].status_source = "manual"
-                # Update display text and color
                 item.setText(value if value else "(пусто)")
                 color = _STATUS_COLORS.get(value, _STATUS_COLORS[STATUS_EMPTY])
                 item.setForeground(QBrush(QColor(color)))
-                # Update source cell in the same table row
                 src_item = self._table.item(item.row(), _COL_SOURCE)
                 if src_item:
                     src_item.setText("Ручной")

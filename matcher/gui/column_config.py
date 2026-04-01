@@ -63,13 +63,11 @@ class ColumnConfigDialog(QDialog):
         form = QFormLayout()
         form.setSpacing(10)
 
-        # Build items list for combos
         items = [_NOT_SET] + [
             f"[{chr(65 + i)}] {h}" if i < 26 else f"[{i}] {h}"
             for i, h in enumerate(self._headers)
         ]
 
-        # Auto-detect if no current mapping
         auto = None
         if current is None or current.col_name is None:
             try:
@@ -77,7 +75,6 @@ class ColumnConfigDialog(QDialog):
             except Exception:
                 pass
 
-        # ID ППТС
         self._combo_id = QComboBox()
         self._combo_id.addItems(items)
         preset_id = (current.col_id if current and current.col_id is not None
@@ -86,7 +83,6 @@ class ColumnConfigDialog(QDialog):
             self._combo_id.setCurrentIndex(preset_id + 1)
         form.addRow("ID ППТС:", self._combo_id)
 
-        # Name
         self._combo_name = QComboBox()
         self._combo_name.addItems(items)
         preset_name = (current.col_name if current and current.col_name is not None
@@ -95,7 +91,6 @@ class ColumnConfigDialog(QDialog):
             self._combo_name.setCurrentIndex(preset_name + 1)
         form.addRow("Наименование ПО:", self._combo_name)
 
-        # Vendor
         self._combo_vendor = QComboBox()
         self._combo_vendor.addItems(items)
         preset_vendor = (current.col_vendor if current and current.col_vendor is not None
@@ -106,12 +101,10 @@ class ColumnConfigDialog(QDialog):
 
         layout.addLayout(form)
 
-        # Preview
         preview_label = QLabel("Первые строки для проверки будут видны после сохранения.")
         preview_label.setObjectName("preview_hint")
         layout.addWidget(preview_label)
 
-        # Buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -127,11 +120,11 @@ class ColumnConfigDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _combo_to_index(self, combo: QComboBox) -> int | None:
-        """Convert combo selection to column index (0-based), or None."""
+        """Convert combo selection to 0-based column index, or None if unset."""
         idx = combo.currentIndex()
         if idx <= 0:
             return None
-        return idx - 1  # subtract 1 for the "(не выбран)" item
+        return idx - 1
 
     def _on_save(self) -> None:
         col_name = self._combo_to_index(self._combo_name)

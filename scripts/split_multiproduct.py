@@ -1,13 +1,4 @@
-"""Split multi-product entries into separate rows.
-
-Handles cases where a single TSU row contains multiple products
-separated by common delimiters: semicolons, " и ", " / ", commas
-(only when not inside version strings).
-
-Example:
-    "Apache HTTP Server; Nginx" -> two separate entries
-    "Microsoft Word и Excel"    -> two separate entries
-"""
+"""Split multi-product entries (semicolon, 'и', '/') into separate rows."""
 
 from __future__ import annotations
 
@@ -16,7 +7,6 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# Patterns that indicate multiple products in a single field
 _SPLIT_PATTERN = re.compile(
     r"\s*(?:;|\s+и\s+|\s*/\s*)\s*",
     re.IGNORECASE,

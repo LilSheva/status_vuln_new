@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 
 
 class KonamiDetector(QObject):
