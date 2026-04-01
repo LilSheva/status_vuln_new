@@ -90,6 +90,8 @@ class Pipeline:
                     journal_index.setdefault(cve, []).append(entry)
             self._progress("Загрузка журналов", 1, 1)
             logger.info("Journal index: %d unique CVEs", len(journal_index))
+            for cve_key in list(journal_index)[:10]:
+                logger.debug("  journal CVE: %r (%d entries)", cve_key, len(journal_index[cve_key]))
 
         self._progress("Препроцессинг", 0, total)
         vulns = self._run_preprocessing(vulnerabilities)
@@ -226,6 +228,8 @@ class Pipeline:
         # Step 0: Check journal
         cve_key = vuln.cve_id.strip().upper() if vuln.cve_id else ""
         journal_hits = journal_index.get(cve_key, []) if journal_index and cve_key else []
+        if journal_index and cve_key and not journal_hits:
+            logger.debug("No journal match for CVE %r", cve_key)
 
         if journal_hits and not self._settings.journal_recheck:
             # Trust journal, no vector analysis

@@ -171,6 +171,8 @@ def _write_main_sheet(
 
         if r.status == STATUS_YES:
             ppts_value = r.ppts_id or ""
+        elif r.status in (STATUS_NO, STATUS_CONDITIONAL, STATUS_LINUX):
+            ppts_value = "----------"
         else:
             ppts_value = ""
 
