@@ -143,6 +143,12 @@ class SettingsPanel(QWidget):
         kb_layout.addLayout(kb_path_row)
         layout.addRow("База знаний:", kb_widget)
 
+        self._reset_btn = QPushButton("Сбросить настройки")
+        self._reset_btn.setObjectName("btn_secondary")
+        self._reset_btn.setToolTip("Вернуть все параметры к значениям по умолчанию")
+        self._reset_btn.clicked.connect(self._reset_to_defaults)
+        layout.addRow("", self._reset_btn)
+
     def _on_theme_changed(self, name: str) -> None:
         """Apply the selected theme."""
         app = QApplication.instance()
@@ -166,6 +172,14 @@ class SettingsPanel(QWidget):
             self._kb_path_edit.setText(path)
             self._kb_path_edit.setToolTip(path)
             self.settings_changed.emit()
+
+    def _reset_to_defaults(self) -> None:
+        """Reset all settings to factory defaults (preserving theme and KB path)."""
+        current_theme = self._theme_combo.currentText()
+        current_kb = self._kb_path_edit.text()
+        defaults = PipelineSettings(theme=current_theme, kb_path=current_kb)
+        self.set_settings(defaults)
+        self.settings_changed.emit()
 
     def get_settings(self) -> PipelineSettings:
         """Return current settings as a PipelineSettings object."""

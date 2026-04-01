@@ -257,68 +257,54 @@ def _write_detail_sheet(
     for result_num, r in enumerate(results, 1):
         tsu_display = _vendor_product(r.vulnerability.vendor, r.vulnerability.product)
 
-        # Determine rows to write
-        rows_to_write: list[tuple[str, MatchCandidate | None, JournalEntry | None]] = []
-
-        # Add candidate rows
         filtered = (
             _filter_candidates(r.candidates, primary_limit, secondary_limit)
             if r.candidates
             else []
         )
-        for c in filtered:
-            rows_to_write.append(("candidate", c, None))
-
-        # Add journal rows
-        for jm in r.journal_matches:
-            rows_to_write.append(("journal", None, jm))
-
-        if not rows_to_write:
+        jmatches = r.journal_matches
+        n_rows = max(len(filtered), len(jmatches))
+        if n_rows == 0:
             continue
 
         group_start = row_idx
+        _LEFT = Alignment(horizontal="left", vertical="center")
+        _CENTER = Alignment(horizontal="center", vertical="center")
 
-        for i, (row_type, candidate, journal_match) in enumerate(rows_to_write):
-            # Shared columns: only on first row
-            ws.cell(row=row_idx, column=1, value=result_num if i == 0 else None)
-            ws.cell(row=row_idx, column=2, value=r.vulnerability.cve_id if i == 0 else None)
-            ws.cell(row=row_idx, column=3, value=tsu_display if i == 0 else None)
+        for i in range(n_rows):
+            ws.cell(row=row_idx, column=1, value=result_num if i == 0 else None).alignment = _CENTER
+            ws.cell(row=row_idx, column=2, value=r.vulnerability.cve_id if i == 0 else None).alignment = _LEFT
+            ws.cell(row=row_idx, column=3, value=tsu_display if i == 0 else None).alignment = _LEFT
 
-            if row_type == "candidate":
-                c = candidate  # type: ignore[assignment]
+            # Candidate data (parallel, left side)
+            if i < len(filtered):
+                c = filtered[i]
                 ppts_display = _vendor_product(c.software.vendor, c.software.name)
-                tier = _candidate_tier(c.combined_score)
-
-                ws.cell(row=row_idx, column=4, value=ppts_display)
-                ws.cell(row=row_idx, column=5, value=c.software.id)
-
+                ws.cell(row=row_idx, column=4, value=ppts_display).alignment = _LEFT
+                ws.cell(row=row_idx, column=5, value=c.software.id).alignment = _LEFT
                 vs_cell = ws.cell(row=row_idx, column=6, value=round(c.vector_score, 4))
-                ws.cell(row=row_idx, column=7, value=round(c.fuzzy_score, 2))
-                ws.cell(row=row_idx, column=8, value=round(c.exact_score, 2))
+                ws.cell(row=row_idx, column=7, value=round(c.fuzzy_score, 2)).alignment = _CENTER
+                ws.cell(row=row_idx, column=8, value=round(c.exact_score, 2)).alignment = _CENTER
                 cs_cell = ws.cell(row=row_idx, column=9, value=round(c.combined_score, 4))
-
+                vs_cell.alignment = _CENTER
+                cs_cell.alignment = _CENTER
                 for cell in (vs_cell, cs_cell):
                     fill = _score_fill(cell.value if cell.value else 0)
                     if fill:
                         cell.fill = fill
+                ws.cell(row=row_idx, column=10, value=_candidate_tier(c.combined_score)).alignment = _CENTER
+                ws.cell(row=row_idx, column=11, value=_source_label(c.software.source)).alignment = _LEFT
 
-                ws.cell(row=row_idx, column=10, value=tier)
-                ws.cell(row=row_idx, column=11, value=_source_label(c.software.source))
-                # Journal columns empty for candidate rows
+            # Journal data (parallel, right side)
+            if i < len(jmatches):
+                jm = jmatches[i]
+                ws.cell(row=row_idx, column=12, value=jm.source_file).alignment = _LEFT
+                ws.cell(row=row_idx, column=13, value=jm.product or "").alignment = _LEFT
+                ws.cell(row=row_idx, column=14, value=jm.ppts_id or "").alignment = _LEFT
+                ws.cell(row=row_idx, column=15, value=jm.responsible or "").alignment = _LEFT
 
-            elif row_type == "journal":
-                jm = journal_match  # type: ignore[assignment]
-                # Candidate columns 4-11 empty for journal rows
-                ws.cell(row=row_idx, column=12, value=jm.source_file)
-                product_j = jm.product if jm.product else ""
-                ws.cell(row=row_idx, column=13, value=product_j)
-                ws.cell(row=row_idx, column=14, value=jm.ppts_id or "")
-                ws.cell(row=row_idx, column=15, value=jm.responsible or "")
-
-            # Apply borders
             for col in range(1, ncols + 1):
                 ws.cell(row=row_idx, column=col).border = _THIN_BORDER
-
             row_idx += 1
 
         group_end = row_idx - 1
@@ -329,9 +315,8 @@ def _write_detail_sheet(
                     start_row=group_start, start_column=col,
                     end_row=group_end, end_column=col,
                 )
-                ws.cell(row=group_start, column=col).alignment = Alignment(
-                    horizontal="center", vertical="center", wrap_text=True,
-                )
+                align = _CENTER if col == 1 else Alignment(horizontal="left", vertical="center", wrap_text=True)
+                ws.cell(row=group_start, column=col).alignment = align
 
         for col in range(1, ncols + 1):
             cell = ws.cell(row=group_start, column=col)

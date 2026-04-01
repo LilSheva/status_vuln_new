@@ -37,7 +37,6 @@ _STATUS_COLORS: dict[str, str] = {
 
 _COLUMNS = [
     "CVE ID",
-    "Вендор",
     "Продукт",
     "Статус",
     "Источник",
@@ -47,9 +46,9 @@ _COLUMNS = [
     "Балл",
 ]
 
-_COL_STATUS = 3
-_COL_SOURCE = 4
-_COL_PPTS_ID = 5
+_COL_STATUS = 2
+_COL_SOURCE = 3
+_COL_PPTS_ID = 4
 
 _ROLE_RESULT_IDX = Qt.ItemDataRole.UserRole + 100
 
@@ -144,8 +143,8 @@ class ResultsView(QWidget):
                 cve_item = self._table.item(row, 0)
                 if cve_item is not None:
                     cve_item.setToolTip("F")
-            self._set_cell(row, 1, vuln.vendor, row)
-            self._set_cell(row, 2, vuln.product, row)
+            product_display = f"{vuln.vendor} - {vuln.product}" if vuln.vendor else vuln.product
+            self._set_cell(row, 1, product_display, row)
 
             status_item = QTableWidgetItem(result.status or "(пусто)")
             status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -164,19 +163,19 @@ class ResultsView(QWidget):
             self._set_cell(row, _COL_SOURCE, source_display, row)
 
             self._set_cell(row, _COL_PPTS_ID, result.ppts_id or "", row)
-            self._set_cell(row, 6, result.responsible or "", row)
+            self._set_cell(row, 5, result.responsible or "", row)
 
             if result.candidates:
                 best = result.candidates[0]
-                self._set_cell(row, 7, best.software.name, row)
+                self._set_cell(row, 6, best.software.name, row)
                 score_item = QTableWidgetItem(f"{best.combined_score:.3f}")
                 score_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 score_item.setData(Qt.ItemDataRole.UserRole, best.combined_score)
                 score_item.setData(_ROLE_RESULT_IDX, row)
-                self._table.setItem(row, 8, score_item)
+                self._table.setItem(row, 7, score_item)
             else:
+                self._set_cell(row, 6, "", row)
                 self._set_cell(row, 7, "", row)
-                self._set_cell(row, 8, "", row)
 
         self._table.setSortingEnabled(True)
         self._table.blockSignals(False)

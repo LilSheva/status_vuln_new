@@ -23,7 +23,10 @@ def load_settings() -> PipelineSettings:
     if CONFIG_FILE.exists():
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            return PipelineSettings(**data)
+            # Filter to only known fields to survive config format changes
+            valid = {f.name for f in __import__("dataclasses").fields(PipelineSettings)}
+            filtered = {k: v for k, v in data.items() if k in valid}
+            return PipelineSettings(**filtered)
         except Exception:
             logger.exception("Failed to load config from %s, using defaults", CONFIG_FILE)
     return PipelineSettings()

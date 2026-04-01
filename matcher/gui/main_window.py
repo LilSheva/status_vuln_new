@@ -386,10 +386,14 @@ class MainWindow(QMainWindow):
         if not self._results:
             return
 
+        from datetime import datetime
+
+        now = datetime.now()
+        default_name = now.strftime("report_%H-%M_%d-%m-%y.xlsx")
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Сохранить отчёт",
-            "report.xlsx",
+            default_name,
             "Excel (*.xlsx)",
         )
         if not path:
